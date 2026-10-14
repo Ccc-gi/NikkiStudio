@@ -10,7 +10,7 @@ const lawn=createSoftGrass(),group=new T.Group();
 const paving=new T.Mesh(new T.BoxGeometry(4,.1,4));paving.position.y=-.05;group.add(paving);
 const camera=new T.PerspectiveCamera(),ground={visible:true},center=new T.Vector3();
 lawn.fit(group);lawn.update(camera,'standard',ground,center);assert.equal(lawn.mesh.visible,false);
-lawn.update(camera,'fine',ground,center);assert.equal(lawn.mesh.visible,true);
+lawn.update(camera,'fine',ground,center);lawn.flush();assert.equal(lawn.mesh.visible,true);
 assert.ok(lawn.mesh.count>3000&&lawn.mesh.count<=65000);
 const matrix=new T.Matrix4();
 for(let i=0;i<lawn.mesh.count;i++){
@@ -30,7 +30,7 @@ lawn.update(camera,'light',ground,center);assert.equal(lawn.mesh.visible,false);
 lawn.update(camera,'fine',ground,center);assert.deepEqual(Array.from(lawn.mesh.instanceMatrix.array),original);
 // Batching hides a render mesh while its logical furniture owner stays visible.
 const owner=new T.Group();group.remove(paving);owner.add(paving);group.add(owner);paving.visible=false;
-lawn.fit(group);lawn.update(camera,'fine',ground,center);
+lawn.fit(group);lawn.update(camera,'fine',ground,center);lawn.flush();
 for(let i=0;i<lawn.mesh.count;i++){
   lawn.mesh.getMatrixAt(i,matrix);assert.ok(!(Math.abs(matrix.elements[12])<2.35&&Math.abs(matrix.elements[14])<2.35));
 }

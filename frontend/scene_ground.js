@@ -11,6 +11,7 @@ const soft=createSoftGrass(),fineMaterial=createSoftGroundMaterial();scene.add(s
 function fitToFurniture(group){group.updateMatrixWorld(true);const b=new T.Box3().setFromObject(group);if(b.isEmpty()){ground.scale.set(2000,2000,1);ground.position.set(0,-.12,0);}else{ground.scale.set(Math.max(2000,(b.max.x-b.min.x+40)*12),Math.max(2000,(b.max.z-b.min.z+40)*12),1);ground.position.set((b.max.x+b.min.x)/2,-.12,(b.max.z+b.min.z)/2);}map.repeat.set(ground.scale.x/8,ground.scale.y/8);}
 const fit=group=>{fitToFurniture(group);soft.fit(group);};
 fit(new T.Group());return {ground,ready:Promise.resolve(),fitToFurniture:fit,invalidate:soft.fit,
+  get metrics(){return soft.mesh.userData;},
   update:(camera,level,center)=>{ground.material=level==='fine'?fineMaterial:material;
     soft.update(camera,level,ground,center);}};
 }

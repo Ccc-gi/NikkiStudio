@@ -25,6 +25,15 @@ export function createSoftGrass(){
   const material=new T.MeshStandardMaterial({color:0xffffff,map:createGrassTuftTexture(),roughness:1,
     side:T.DoubleSide,alphaTest:.15,alphaToCoverage:true});
   material.onBeforeCompile=shader=>{
+    // Grass already has painted shading. Four nearby depth samples avoid the
+    // expensive PCSS blocker search on thousands of overlapping alpha cards.
+    shader.fragmentShader=shader.fragmentShader.replace('#include <shadowmap_pars_fragment>',
+      T.ShaderChunk.shadowmap_pars_fragment.replace('shadow = PCSS(shadowMap, shadowCoord);',`
+        vec2 grassTexel=vec2(1.0)/shadowMapSize;
+        shadow=.25*(step(shadowCoord.z,depth)
+          +step(shadowCoord.z,texture2D(shadowMap,shadowCoord.xy+grassTexel*vec2(1.,0.)).r)
+          +step(shadowCoord.z,texture2D(shadowMap,shadowCoord.xy+grassTexel*vec2(0.,1.)).r)
+          +step(shadowCoord.z,texture2D(shadowMap,shadowCoord.xy+grassTexel).r));`));
     shader.vertexShader=shader.vertexShader.replace('#include <common>',`#include <common>
       varying float grassHeight;`).replace('#include <begin_vertex>',`#include <begin_vertex>
       grassHeight=position.y;
@@ -48,13 +57,16 @@ export function createSoftGrass(){
   geometry.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));
   // Rounded clump lighting prevents thin grass ribbons looking metallic or hard.
   geometry.setAttribute('normal',new T.Float32BufferAttribute(normals,3));
-  const capacity=65000,mesh=new T.InstancedMesh(geometry,material,capacity);
+  const capacity=24000,mesh=new T.InstancedMesh(geometry,material,capacity);
+  mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
   mesh.name='ProceduralSoftGrass';mesh.count=0;mesh.castShadow=false;mesh.receiveShadow=true;
   mesh.frustumCulled=false;mesh.raycast=()=>{};
-  const dummy=new T.Object3D(),color=new T.Color();let last='',obstacles=[],revision=0,pendingGroup=null;
+  let last='',obstacles=[],revision=0,pendingGroup=null,job=null,lastStart=-Infinity;
+  const nextMatrices=new Float32Array(capacity*16),nextColors=new Float32Array(capacity*3);
+  const obstacleGrid=new Map(),largeObstacles=[],obstacleBounds=new T.Box3();
   const hash=(x,z,k=0)=>{let n=Math.imul(x,374761393)^Math.imul(z,668265263)^Math.imul(k,1274126177);n=Math.imul(n^(n>>>13),1274126177);return ((n^(n>>>16))>>>0)/4294967296;};
   function scan(group){
-    group.updateMatrixWorld(true);obstacles=[];
+    group.updateMatrixWorld(true);obstacles=[];obstacleGrid.clear();largeObstacles.length=0;obstacleBounds.makeEmpty();
     group.traverse(o=>{
       if(!o.isMesh||!o.geometry||o.userData.unmatched)return;
       const b=new T.Box3().setFromObject(o);
@@ -64,15 +76,18 @@ export function createSoftGrass(){
       if(b.min.y<.18&&b.max.y>-.13&&b.max.y<1.2)
         obstacles.push({minX:b.min.x-.35,maxX:b.max.x+.35,minZ:b.min.z-.35,maxZ:b.max.z+.35,owner});
     });
+    for(const b of obstacles){
+      obstacleBounds.expandByPoint(new T.Vector3(b.minX,-.115,b.minZ));
+      obstacleBounds.expandByPoint(new T.Vector3(b.maxX,.4,b.maxZ));
+      const x0=Math.floor(b.minX/8),x1=Math.floor(b.maxX/8),z0=Math.floor(b.minZ/8),z1=Math.floor(b.maxZ/8);
+      if((x1-x0+1)*(z1-z0+1)>4096){largeObstacles.push(b);continue;}
+      for(let x=x0;x<=x1;x++)for(let z=z0;z<=z1;z++){
+        const key=x+':'+z;if(!obstacleGrid.has(key))obstacleGrid.set(key,[]);obstacleGrid.get(key).push(b);
+      }
+    }
   }
-  function fit(group){pendingGroup=group;revision++;last='';}
-  function update(camera,level,ground){
-    mesh.visible=level==='fine'&&ground.visible;if(!mesh.visible)return;
-    if(pendingGroup){scan(pendingGroup);pendingGroup=null;}
-    camera.updateMatrixWorld();
-    const key=[...camera.position.toArray().map(v=>Math.round(v*4)),
-      ...camera.quaternion.toArray().map(v=>Math.round(v*100)),camera.aspect,camera.fov,revision].join(':');
-    if(key===last)return;last=key;
+  function fit(group){pendingGroup=group;revision++;last='';job=null;lastStart=-Infinity;}
+  function* build(camera,ground){
     const frustum=new T.Frustum().setFromProjectionMatrix(new T.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
     // Intersect all twelve frustum edges with the preview ground. This includes
     // the whole visible ground, even when the horizon crosses the viewport.
@@ -89,39 +104,78 @@ export function createSoftGrass(){
     visible.max.x=Math.min(visible.max.x+.5,gx+(ground.scale?.x??2000)/2);
     visible.min.z=Math.max(visible.min.z-.5,gz-(ground.scale?.y??2000)/2);
     visible.max.z=Math.min(visible.max.z+.5,gz+(ground.scale?.y??2000)/2);
-    const tileSize=8,tiles=[],box=new T.Box3(),point=new T.Vector3();let estimate=0,count=0;
-    for(let tx=Math.floor(visible.min.x/tileSize);tx<=Math.floor(visible.max.x/tileSize);tx++)
-      for(let tz=Math.floor(visible.min.z/tileSize);tz<=Math.floor(visible.max.z/tileSize);tz++){
-        box.min.set(tx*tileSize,groundY,tz*tileSize);box.max.set((tx+1)*tileSize,.4,(tz+1)*tileSize);
+    const tiles=[],box=new T.Box3(),point=new T.Vector3();let estimate=0,count=0,visited=0;
+    const rootSize=2**Math.ceil(Math.log2(Math.max(8,ground.scale?.x??2000,ground.scale?.y??2000)));
+    const stack=[{x:gx-rootSize/2,z:gz-rootSize/2,size:rootSize}];
+    while(stack.length){
+        const {x,z,size}=stack.pop();
+        if(++visited%64===0)yield;
+        if(x>visible.max.x||x+size<visible.min.x||z>visible.max.z||z+size<visible.min.z)continue;
+        box.min.set(x,groundY,z);box.max.set(x+size,.4,z+size);
         if(!frustum.intersectsBox(box))continue;
-        const distance=camera.position.distanceTo(box.getCenter(point));
+        const distance=box.distanceToPoint(camera.position);
+        const desired=Math.min(256,8*2**Math.max(0,Math.floor(Math.log2(Math.max(1,distance/40)))));
+        if(size>desired){const half=size/2;for(const dx of [0,half])for(const dz of [0,half])stack.push({x:x+dx,z:z+dz,size:half});continue;}
         const step=.24*Math.pow(2,Math.max(0,Math.floor(Math.log2(Math.max(1,distance/40)))));
-        const cells=Math.max(1,Math.ceil(tileSize/step));estimate+=cells*cells;
-        tiles.push({tx,tz,cells,nearby:obstacles.filter(b=>b.owner.visible&&b.maxX>box.min.x&&b.minX<box.max.x&&b.maxZ>box.min.z&&b.minZ<box.max.z)});
+        const cells=Math.max(1,Math.ceil(size/step));estimate+=cells*cells;
+        const candidates=new Set(largeObstacles);
+        if(box.intersectsBox(obstacleBounds))for(let bx=Math.floor(x/8);bx<=Math.floor((x+size)/8);bx++)for(let bz=Math.floor(z/8);bz<=Math.floor((z+size)/8);bz++)for(const b of obstacleGrid.get(bx+':'+bz)??[])candidates.add(b);
+        tiles.push({x,z,size,cells,distance,nearby:[...candidates].filter(b=>b.owner.visible&&b.maxX>x&&b.minX<x+size&&b.maxZ>z&&b.minZ<z+size)});
       }
-    const budgetScale=Math.max(1,Math.ceil(Math.sqrt(estimate/48000)));
-    tufts:for(const {tx,tz,cells,nearby} of tiles){
-      const n=Math.max(1,Math.floor(cells/budgetScale)),step=tileSize/n;
+    tiles.sort((a,b)=>a.distance-b.distance);
+    const budgetScale=Math.max(1,Math.sqrt(estimate/(capacity*.85)));let candidates=0;
+    tufts:for(const {x:tileX,z:tileZ,size,cells,nearby} of tiles){
+      const n=Math.max(1,Math.floor(cells/budgetScale)),step=size/n;
       for(let i=0;i<n;i++)for(let j=0;j<n;j++){
-      const ix=tx*97+i,iz=tz*97+j;
-      const x=tx*tileSize+(i+hash(ix,iz))*step,z=tz*tileSize+(j+hash(ix,iz,1))*step;
+      if(++candidates%128===0)yield;
+      const ix=Math.round(tileX*16)+i,iz=Math.round(tileZ*16)+j;
+      const x=tileX+(i+hash(ix,iz))*step,z=tileZ+(j+hash(ix,iz,1))*step;
       if(x<visible.min.x||x>visible.max.x||z<visible.min.z||z>visible.max.z||
         !frustum.containsPoint(point.set(x,groundY+.12,z))||nearby.some(b=>x>b.minX&&x<b.maxX&&z>b.minZ&&z<b.maxZ))continue;
       const patch=.5+.25*Math.sin(x*.43+Math.sin(z*.29))+.25*Math.sin(z*.51+x*.11);
       // Broad sparse and lush patches, rather than uniform needle-like coverage.
       if(hash(ix,iz,6)>.75+patch*.22)continue;
-      dummy.position.set(x,-.115,z);dummy.rotation.set(0,hash(ix,iz,2)*Math.PI*2,0);
       const width=.42+hash(ix,iz,3)*.18;
-      dummy.scale.set(width,.18+patch*.09+hash(ix,iz,4)*.045,width);
-      dummy.updateMatrix();mesh.setMatrixAt(count,dummy.matrix);
-      color.setRGB(.93+patch*.08,.94+patch*.08,.88+patch*.1).multiplyScalar(.93+hash(ix,iz,5)*.06);
-      mesh.setColorAt(count,color);if(++count===capacity)break tufts;
+      const angle=hash(ix,iz,2)*Math.PI*2,cos=Math.cos(angle)*width,sin=Math.sin(angle)*width;
+      const m=count*16;
+      nextMatrices.set([cos,0,-sin,0,0,.18+patch*.09+hash(ix,iz,4)*.045,0,0,sin,0,cos,0,x,-.115,z,1],m);
+      const tint=.93+hash(ix,iz,5)*.06;
+      nextColors.set([(.93+patch*.08)*tint,(.94+patch*.08)*tint,(.88+patch*.1)*tint],count*3);
+      if(++count===capacity)break tufts;
       }
     }
+    // Swap only completed builds: moving the camera never exposes half a lawn.
+    mesh.instanceMatrix.array.set(nextMatrices.subarray(0,count*16));
+    if(!mesh.instanceColor){mesh.instanceColor=new T.InstancedBufferAttribute(new Float32Array(capacity*3),3).setUsage(T.DynamicDrawUsage);material.needsUpdate=true;}
+    mesh.instanceColor.array.set(nextColors.subarray(0,count*3));
+    mesh.instanceMatrix.clearUpdateRanges();mesh.instanceMatrix.addUpdateRange(0,count*16);
+    mesh.instanceColor.clearUpdateRanges();mesh.instanceColor.addUpdateRange(0,count*3);
     mesh.userData.visibleTiles=tiles.length;mesh.userData.tuftCount=count;
+    mesh.userData.visitedNodes=visited;
     mesh.count=count;mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor)mesh.instanceColor.needsUpdate=true;
   }
-  return {mesh,fit,update};
+  function update(camera,level,ground){
+    const started=performance.now();
+    mesh.visible=level==='fine'&&ground.visible;if(!mesh.visible){job=null;last='';return;}
+    if(pendingGroup){scan(pendingGroup);pendingGroup=null;}
+    camera.updateMatrixWorld();
+    const key=[...camera.position.toArray().map(v=>Math.round(v*2)),
+      ...camera.quaternion.toArray().map(v=>Math.round(v*80)),camera.aspect,camera.fov,revision].join(':');
+    const now=performance.now();
+    if(!job&&key!==last&&(mesh.count===0||now-lastStart>100)){
+      last=key;lastStart=now;job=build(camera.clone(),ground);
+      mesh.userData.maxGenerationSliceMs=0;
+    }
+    const working=Boolean(job);
+    const deadline=performance.now()+2;
+    while(job&&performance.now()<deadline){if(job.next().done)job=null;}
+    mesh.userData.generationPending=Boolean(job);
+    mesh.userData.cpuMs=performance.now()-started;
+    if(working)mesh.userData.maxGenerationSliceMs=Math.max(mesh.userData.maxGenerationSliceMs,mesh.userData.cpuMs);
+  }
+  // Synchronous draining is used only by geometry tests, never by rendering.
+  function flush(){while(job){if(job.next().done)job=null;}}
+  return {mesh,fit,update,flush};
 }
 
 export function createSoftGroundMaterial(){
