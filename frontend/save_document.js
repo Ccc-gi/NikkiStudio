@@ -6,7 +6,7 @@ export class SaveDocument {
     this.key=Array.isArray(raw)?null:['Snapshots','PlaceInfo'].find(k=>Array.isArray(raw?.[k])||empty(raw?.[k]));
     if(!Array.isArray(raw)&&!this.key)throw Error('存档需要 Snapshots 或 PlaceInfo 数组');
     this.emptyObjectCollection=!!this.key&&empty(raw[this.key]);
-    this.data=copy(raw);this.name=name;this.undoStack=[];this.redoStack=[];this.revision=0;this.savedRevision=0;this.nextRevision=1;
+    this.data=copy(raw);this.name=name;this.undoStack=[];this.redoStack=[];this.revision=0;this.savedRevision=0;this.nextRevision=1;this.idFloor=Math.max(0,...this.rows.map(r=>Number(r.instanceID??r.InstanceID)||0));
   }
   get data(){return this.emptyObjectCollection&&this.rows.length===0?{...this._data,[this.key]:{}}:this._data;}
   set data(value){this._data=value;if(this.key&&value[this.key]!==null&&!Array.isArray(value[this.key])&&Object.keys(value[this.key]).length===0)value[this.key]=[];}
@@ -45,7 +45,7 @@ export class SaveDocument {
     this.undoStack.push({label:'修改变换',patches,from:this.revision,to:revision});
     if(this.undoStack.length>30)this.undoStack.shift();this.changedIndices=patches.map(p=>p.index);this.revision=revision;this.redoStack=[];return true;
   }
-  nextId(){return Math.max(0,...this.rows.map(r=>Number(r.instanceID??r.InstanceID)||0))+1;}
+  nextId(){return this.idFloor=Math.max(this.idFloor,...this.rows.map(r=>Number(r.instanceID??r.InstanceID)||0))+1;}
   duplicate(index){return this.duplicateMany([index])[0];}
   add(item,position,rotation={x:0,y:0,z:0}){const id=this.nextId();this.commit('添加物品',rows=>{rows.push(this.key==='PlaceInfo'?{ItemID:Number(item),InstanceID:id,Location:{X:position.x,Y:position.y,Z:position.z},Rotation:{Pitch:rotation.x,Yaw:rotation.y,Roll:rotation.z},Scale:{X:1,Y:1,Z:1}}:{bIsAdd:false,instanceID:id,furnitureInfo:{group_id:0,attach_id:0,cfg_item_id:Number(item),colors:[0],trans:{position:copy(position),rotation:copy(rotation),scale:{x:1,y:1,z:1}}},extra:{TempInfo:{}}});});return this.rows.length-1;}
   applySplices(splices,undo=false){
@@ -63,7 +63,7 @@ export class SaveDocument {
   duplicateMany(indices,positions=null,rotations=null){
     let id=this.nextId();const start=this.rows.length;
     const added=indices.map((index,i)=>{const row=copy(this.rows[index]);if(row.furnitureInfo){row.instanceID=id++;if(positions)row.furnitureInfo.trans.position={...row.furnitureInfo.trans.position,...positions[i]};else row.furnitureInfo.trans.position.x+=100;row.furnitureInfo.attach_id=0;row.furnitureInfo.group_id=0;}else{row.InstanceID=id++;if(positions)row.Location={...row.Location,X:positions[i].x,Y:positions[i].y,Z:positions[i].z};else row.Location.X+=100;}if(rotations){const r=rotations[i];if(row.furnitureInfo)row.furnitureInfo.trans.rotation=copy(r);else row.Rotation={...row.Rotation,Pitch:r.x,Yaw:r.y,Roll:r.z};}return row;});
-    this.commitSplices('复制物品',added.length?[{index:start,removed:[],added}]:[]);return added.map((_,i)=>start+i);
+    this.idFloor=Math.max(this.idFloor,id-1);this.commitSplices('复制物品',added.length?[{index:start,removed:[],added}]:[]);return added.map((_,i)=>start+i);
   }
   serialize(){return JSON.stringify(this.data,null,2);}
 }
