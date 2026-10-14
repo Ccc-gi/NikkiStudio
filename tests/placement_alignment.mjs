@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import * as T from 'three';
 import {alignedPlacementQuaternion,surfacePlacementPosition,placementSupportPoints,installWorkspacePlacement} from '../frontend/workspace_placement.js';
+import {TransformFrame} from '../frontend/transform_frame.js';
 const yaw=a=>new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),a*Math.PI/180);
 const heading=q=>{const v=new T.Vector3(0,0,1).applyQuaternion(q);return Math.atan2(v.x,v.z);};
 const node=new T.Group(),model=new T.Group();node.add(model);model.quaternion.copy(yaw(-90));node.quaternion.copy(yaw(25));
@@ -39,3 +40,23 @@ send(canvas,'pointerdown',{clientX:50,clientY:50,button:0,altKey:true,shiftKey:f
 assert.equal(committed.nodes.length,1);assert.ok(Math.abs(heading(committed.nodes[0].quaternion.clone().multiply(held.children[0].quaternion))-Math.PI/3)<1e-9);
 assert.equal(placement.active,false);
 console.log('PASS: Alt release/Shift/blur restore original orientation; Alt placement commits only on confirmation');
+
+globalThis.window=new EventTarget();
+const moveCanvas=new EventTarget();moveCanvas.style={};moveCanvas.focus=()=>{};moveCanvas.getBoundingClientRect=canvas.getBoundingClientRect;
+const movePanel={append(){},dataset:{}},moveScene=new T.Scene(),moveFrame=new TransformFrame();let moveNodes,moveCommitted=null,moveEnded=0;
+const moving=installWorkspacePlacement({scene:moveScene,camera,canvas:moveCanvas,panel:movePanel,status,pickSurface:()=>contact,onFinish:()=>{},onMoveStart:nodes=>{moveNodes=nodes;nodes[0].parent.add(moveFrame.object);moveFrame.attach(nodes[0]);},onMoveEnd:()=>{moveEnded++;moveFrame.object.removeFromParent();}});
+const movingNode=sample();await moving.begin(async()=>[movingNode],'moving',(nodes,offset)=>{moveCommitted={nodes,offset};});
+send(moveCanvas,'pointermove',{clientX:50,clientY:50,shiftKey:false,altKey:false});
+const before=movingNode.getWorldPosition(new T.Vector3());
+send(window,'keydown',{key:'m',shiftKey:false,altKey:false,ctrlKey:false,metaKey:false});assert.equal(movePanel.dataset.placement,'move');
+const delta=new T.Vector3(2,.75,-1);moveFrame.object.position.add(delta);moveFrame.apply('translate');movingNode.updateWorldMatrix(true,true);
+send(moveCanvas,'pointermove',{clientX:70,clientY:70,shiftKey:false,altKey:false});moving.update();
+assert.ok(movingNode.getWorldPosition(new T.Vector3()).distanceTo(before.clone().add(delta))<1e-8);assert.equal(moveCommitted,null);
+send(window,'keydown',{key:'m',shiftKey:false,altKey:false,ctrlKey:false,metaKey:false});moving.update();
+assert.equal(moveEnded,1);assert.ok(movingNode.getWorldPosition(new T.Vector3()).distanceTo(before.clone().add(delta))<1e-8);
+send(window,'keydown',{key:'m',shiftKey:false,altKey:false,ctrlKey:false,metaKey:false});moveFrame.object.position.add(new T.Vector3(8,8,8));moveFrame.apply('translate');
+send(moveCanvas,'pointermove',{clientX:90,clientY:90,shiftKey:false,altKey:false});
+send(window,'pointerdown',{button:2});assert.equal(movePanel.dataset.placement,'preview');assert.ok(movingNode.getWorldPosition(new T.Vector3()).distanceTo(before.clone().add(delta))<1e-8);
+send(moveCanvas,'pointerdown',{clientX:70,clientY:70,button:0,shiftKey:false,altKey:false});send(moveCanvas,'pointerup',{button:0});
+assert.ok(moveCommitted.nodes[0].position.clone().add(moveCommitted.offset).distanceTo(before.clone().add(delta))<1e-8);
+console.log('PASS: M preview is frozen during handle drag, retains movement offset, cancels only current move, and commits on placement');

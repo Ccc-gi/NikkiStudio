@@ -268,23 +268,28 @@ function placementSurface(ray){return ray.intersectObjects([...group.children,..
 let grabRotation=null;
 const grabSingleFrame=new TransformFrame(),grabMultiFrame=new MultiTransformFrame();
 function attachGrabRotation(){
-  const nodes=grabRotation.nodes,active=nodes.at(-1),restricted=buildLegality.enabled&&nodes.some(n=>{const c=buildLegality.constraint(n.userData.id);return c&&(!c.rotationAllowed.x||!c.rotationAllowed.y);});
+  const nodes=grabRotation.nodes,active=nodes.at(-1),restricted=grabRotation.operation==='rotate'&&buildLegality.enabled&&nodes.some(n=>{const c=buildLegality.constraint(n.userData.id);return c&&(!c.rotationAllowed.x||!c.rotationAllowed.y);});
   const working=restricted?new T.Quaternion().fromArray(saveRotationToScene({x:0,y:readNodeTransform(active).rotation.y,z:0})):null;
   syncLegalHandleVisibility(working,nodes);
-  if(buildLegality.enabled&&!buildLegality.available){gizmo.detach();return;}
+  if(grabRotation.operation==='rotate'&&buildLegality.enabled&&!buildLegality.available){gizmo.detach();return;}
   const frame=nodes.length>1?grabMultiFrame:grabSingleFrame,parent=active.parent;
   parent.add(frame.object);frame.attach(nodes.length>1?nodes:active,working);
   if(nodes.length>1)frame.object.position.sub(parent.position);
   frame.object.updateMatrixWorld(true);grabRotation.frame=frame;gizmo.attach(frame.object);
   panel.dataset.transformFrame=nodes.length>1?'grab-selection-center':'grab-calibrated-model';
 }
-const placement=installWorkspacePlacement({scene,camera,canvas:r.domElement,panel,status,pickSurface:placementSurface,onRotationStart:nodes=>{
-  grabRotation={nodes,mode:gizmo.mode,start:null};gizmo.setMode('rotate');attachGrabRotation();
-},onRotationEnd:()=>{
+function startPlacementTransform(nodes,operation){
+  grabRotation={nodes,mode:gizmo.mode,operation,start:null};gizmo.setMode(operation);attachGrabRotation();
+}
+function endPlacementTransform(){
   gizmo.detach();gizmo.dragging=false;gizmo.axis=null;controls.enabled=true;
   grabSingleFrame.object.removeFromParent();grabMultiFrame.object.removeFromParent();
   gizmo.setMode(grabRotation?.mode??editorMode);grabRotation=null;
-},onFinish:cancelled=>{if(cancelled){attachTransformHandle();updateOutline();}}});
+}
+const placement=installWorkspacePlacement({scene,camera,canvas:r.domElement,panel,status,pickSurface:placementSurface,
+  onRotationStart:nodes=>startPlacementTransform(nodes,'rotate'),onRotationEnd:endPlacementTransform,
+  onMoveStart:nodes=>startPlacementTransform(nodes,'translate'),onMoveEnd:endPlacementTransform,
+  onFinish:cancelled=>{if(cancelled){attachTransformHandle();updateOutline();}}});
 async function loadPlacementItem(id){
   const quality=materialQuality();
   const asset=mapping[id];if(!asset?.path)throw Error('此物品尚无模型');
@@ -390,7 +395,11 @@ function enforceDragLegality(){
 }
 function changeGrabRotation(){
   if(!grabRotation?.start)return;
-  const {nodes,frame,start}=grabRotation;frame.apply('rotate');
+  const {nodes,frame,start,operation}=grabRotation;frame.apply(operation);
+  if(operation==='translate'){
+    for(const node of nodes)node.updateMatrixWorld(true);
+    panel.dataset.placementMove=JSON.stringify(nodes.map(node=>readNodeTransform(node).position));return;
+  }
   if(buildLegality.enabled){
     const values=nodes.map(node=>({node,value:readNodeTransform(node)}));
     const changes=values.map(({node,value})=>({node,value,limited:buildLegality.constrain(node.userData.id,value,'rotate')}));

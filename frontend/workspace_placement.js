@@ -82,7 +82,7 @@ export function alignedPlacementQuaternion(node,targetQuaternion){
   return new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),horizontalHeading(targetQuaternion)-horizontalHeading(basis));
 }
 
-export function installWorkspacePlacement({scene,camera,canvas,panel,status,pickSurface,onFinish,onRotationStart=()=>{},onRotationEnd=()=>{}}){
+export function installWorkspacePlacement({scene,camera,canvas,panel,status,pickSurface,onFinish,onRotationStart=()=>{},onRotationEnd=()=>{},onMoveStart=()=>{},onMoveEnd=()=>{}}){
   const root=new T.Group();scene.add(root);
   const ray=new T.Raycaster(),pointer=new T.Vector2(),point=new T.Vector3(),plane=new T.Plane(new T.Vector3(0,1,0),0);
   const hint=document.createElement('div');hint.hidden=true;hint.style.cssText='position:absolute;bottom:48px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:12px;background:#173c36ee;color:#b8ffe4;pointer-events:none;z-index:20;max-width:calc(100% - 32px);width:max-content;text-align:center;font-size:12px;line-height:1.6';panel.append(hint);
@@ -102,23 +102,31 @@ export function installWorkspacePlacement({scene,camera,canvas,panel,status,pick
   function endRotation(cancelled){
     if(!rotation)return;
     if(cancelled)rotation.transforms.forEach(({node,position,quaternion})=>{node.position.copy(position);node.quaternion.copy(quaternion);});
-    onRotationEnd();rotation=null;pressed=false;rotationUi.hidden=true;refreshBounds();
+    if(rotation.mode==='translate'){
+      if(!cancelled){
+        const delta=rotation.transforms[0].node.position.clone().sub(rotation.transforms[0].position);
+        session.nodes.forEach(node=>node.position.sub(delta));session.offset.add(delta);root.position.add(delta);
+      }
+      lastPointer={...rotation.pointer,shift:lastPointer?.shift??false,alt:lastPointer?.alt??false};session.justMoved=true;
+    }
+    (rotation.mode==='translate'?onMoveEnd:onRotationEnd)();rotation=null;pressed=false;rotationUi.hidden=true;refreshBounds();
     canvas.style.cursor='crosshair';panel.dataset.placement='preview';
-    hint.textContent='抓取中 · Alt 对齐中心与水平朝向（单件） · Shift 暂停吸附 · R 旋转 · 左键放置 · 右键取消';status.textContent=hint.textContent;position();
+    hint.textContent='抓取中 · M 移动 · R 旋转 · Alt 对齐中心与水平朝向（单件） · Shift 暂停吸附 · 左键放置 · 右键取消';status.textContent=hint.textContent;position();
   }
-  function toggleRotation(){
+  function toggleTransform(mode){
     if(!session||session.array)return;
-    if(rotation){endRotation(false);return;}
-    if(!session.valid){status.textContent='先将鼠标移入场景，再按 R 旋转';return;}
+    if(rotation){const same=rotation.mode===mode;endRotation(false);if(same)return;}
+    if(!session.valid){status.textContent='先将鼠标移入场景，再按 M 移动或 R 旋转';return;}
     session.alignment=null; // Manual rotation starts from the currently visible orientation.
-    rotation={transforms:session.nodes.map(node=>({node,position:node.position.clone(),quaternion:node.quaternion.clone()}))};
-    panel.dataset.placement='rotate';rotationUi.hidden=false;rotationLabel.textContent='三轴旋转';canvas.style.cursor='';
-    onRotationStart(session.nodes);
-    hint.textContent='旋转中 · 拖动旋转环 · Alt 精细调整 · R 确认 · 右键取消本次旋转';status.textContent=hint.textContent;
+    rotation={mode,pointer:lastPointer?{...lastPointer}:null,transforms:session.nodes.map(node=>({node,position:node.position.clone(),quaternion:node.quaternion.clone()}))};
+    const moving=mode==='translate';panel.dataset.placement=moving?'move':'rotate';rotationUi.hidden=false;rotationLabel.textContent=moving?'三轴移动':'三轴旋转';canvas.style.cursor='';
+    accept.textContent=moving?'确认移动 · M':'确认旋转 · R';reject.textContent=moving?'取消移动':'取消旋转';
+    (moving?onMoveStart:onRotationStart)(session.nodes);
+    hint.textContent=moving?'移动中 · 拖动箭头或平面 · Alt 精细调整 · M 确认 · 右键取消本次移动':'旋转中 · 拖动旋转环 · Alt 精细调整 · R 确认 · 右键取消本次旋转';status.textContent=hint.textContent;
   }
   let session=null,lastPointer=null,generation=0,pressed=false,suppressContext=false;
   function stop(cancelled){
-    if(rotation)onRotationEnd();rotation=null;rotationUi.hidden=true;
+    if(rotation)(rotation.mode==='translate'?onMoveEnd:onRotationEnd)();rotation=null;rotationUi.hidden=true;
     generation++;pressed=false;panel.dataset.placement='idle';hint.hidden=true;canvas.style.cursor='';if(!session){root.clear();return;}
     const current=session;session=null;hint.hidden=true;canvas.style.cursor='';panel.dataset.placement='idle';
     current.array?.onEnd?.();
@@ -169,6 +177,7 @@ export function installWorkspacePlacement({scene,camera,canvas,panel,status,pick
     session.valid=Boolean(target);root.visible=session.valid;
     if(target){root.position.copy(target);
       if(hit?.placementNormal)root.position.copy(surfacePlacementPosition(session.bounds,hit,align||(session.nodes.length===1&&String(session.nodes[0].userData.id)===String(hit.placementId)),session.supportPoints));
+      root.position.add(session.offset);
       panel.dataset.placementPosition=[root.position.x,root.position.y,root.position.z].map(v=>v.toFixed(4)).join(',');
     }
   }
@@ -188,27 +197,28 @@ export function installWorkspacePlacement({scene,camera,canvas,panel,status,pick
           o.material=Array.isArray(o.material)?materials:materials[0];o.castShadow=false;
         });
       });
-      session={nodes,originals,ghosts,commit,cancel,supportPoints,bounds:new T.Box3(bounds.min.clone().sub(anchor),bounds.max.clone().sub(anchor)),valid:false};root.position.copy(anchor);root.visible=false;
+      session={nodes,originals,ghosts,commit,cancel,supportPoints,offset:new T.Vector3(),bounds:new T.Box3(bounds.min.clone().sub(anchor),bounds.max.clone().sub(anchor)),valid:false};root.position.copy(anchor);root.visible=false;
       if(arrayOptions){
         const materials=new Map();for(const [object,material] of originals){const preview=Array.isArray(object.material)?object.material:[object.material],actual=Array.isArray(material)?material:[material];preview.forEach((m,i)=>materials.set(m,actual[i]));}
         nodes.forEach(n=>root.remove(n));session.nodes=[];session.array={...arrayOptions,templates:nodes,groups:[],materials,anchor:anchor.clone(),plane:new T.Plane(new T.Vector3(0,1,0),-anchor.y)};
       }
-      hint.textContent='拿着 '+label+' · Alt 对齐中心与水平朝向（单件） · Shift 暂停吸附 · R 旋转 · 左键放置 · 右键取消';hint.hidden=false;canvas.style.cursor='crosshair';panel.dataset.placement='preview';status.textContent=hint.textContent;
+      hint.textContent='拿着 '+label+' · M 移动 · R 旋转 · Alt 对齐中心与水平朝向（单件） · Shift 暂停吸附 · 左键放置 · 右键取消';hint.hidden=false;canvas.style.cursor='crosshair';panel.dataset.placement='preview';status.textContent=hint.textContent;
       if(session.array){hint.textContent='阵列复制 · 拖动鼠标拉出排列 · 保持原高度 · 右键取消';status.textContent=hint.textContent;}position();
     }catch(error){if(token===generation){stop(true);status.textContent='拿起物品失败：'+error.message;}}
   }
-  canvas.addEventListener('pointermove',e=>{lastPointer={x:e.clientX,y:e.clientY,shift:e.shiftKey,alt:e.altKey};if(session)position();},{capture:true});
+  canvas.addEventListener('pointermove',e=>{lastPointer={x:e.clientX,y:e.clientY,shift:e.shiftKey,alt:e.altKey};if(session){session.justMoved=false;position();}},{capture:true});
   canvas.addEventListener('pointerleave',()=>{if(rotation)return;lastPointer=null;if(session&&!session.array?.settings&&!session.array?.handle){session.valid=false;root.visible=false;}});
   window.addEventListener('keyup',e=>{if((e.key==='Shift'||e.key==='Alt')&&lastPointer){lastPointer.shift=e.shiftKey;lastPointer.alt=e.altKey;position();}});
   window.addEventListener('blur',()=>{if(lastPointer){lastPointer.shift=lastPointer.alt=false;position();}});
-  canvas.addEventListener('pointerdown',e=>{if(!session||session.array?.handle||rotation||e.button!==0)return;e.preventDefault();e.stopImmediatePropagation();canvas.focus({preventScroll:true});lastPointer={x:e.clientX,y:e.clientY,shift:e.shiftKey,alt:e.altKey};pressed=true;position();},{capture:true});
+  canvas.addEventListener('pointerdown',e=>{if(!session||session.array?.handle||rotation||e.button!==0)return;e.preventDefault();e.stopImmediatePropagation();canvas.focus({preventScroll:true});if(!session.justMoved)lastPointer={x:e.clientX,y:e.clientY,shift:e.shiftKey,alt:e.altKey};pressed=true;position();},{capture:true});
   canvas.addEventListener('pointerup',e=>{if(rotation||!pressed||e.button!==0)return;pressed=false;e.preventDefault();e.stopImmediatePropagation();if(session?.valid)stop(false);},{capture:true});
   canvas.addEventListener('click',e=>{if(pressed||session){e.preventDefault();e.stopImmediatePropagation();}},{capture:true});
   window.addEventListener('keydown',e=>{
     if(document.querySelector('dialog[open]')||e.target.closest?.('input,textarea,select,[contenteditable="true"]'))return;
     if(e.key==='Alt'&&session&&!rotation&&!session.array)e.preventDefault();
     if((e.key==='Shift'||e.key==='Alt')&&lastPointer){lastPointer.shift=e.shiftKey;lastPointer.alt=e.altKey;position();}
-    if(session&&!session.array&&e.key.toLowerCase()==='r'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat)toggleRotation();}
+    const mode={m:'translate',r:'rotate'}[e.key.toLowerCase()];
+    if(session&&!session.array&&mode&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat)toggleTransform(mode);}
   },{capture:true});
   window.addEventListener('pointerdown',e=>{suppressContext=false;if(e.button!==2||!(session||panel.dataset.placement==='loading'))return;
     e.preventDefault();e.stopImmediatePropagation();suppressContext=true;if(rotation){endRotation(true);return;}const text=session?.array?.cancelText??'已取消抓取，位置与存档保持原样';stop(true);status.textContent=text;
