@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from backend.config import save_config
 from backend.presets import Presets
+from backend.preset_previews import PresetPreviews
 from backend.storage import Storage, write_json
 from asset_pipeline.runtime import Runtime
 
@@ -30,6 +31,8 @@ class Application:
         self.presets = Presets(self.storage.root)
         self.token = secrets.token_urlsafe(32)
         self.runtime = None
+        self.preset_previews = PresetPreviews(self.storage, self.presets,
+                                            lambda: self.runtime.version if self.runtime else 'unconfigured')
         self.job = {'state': 'idle', 'message': '请选择游戏和输入文件'}
         self.job_lock = threading.Lock()
         self.scene_lock = threading.Lock()
@@ -121,7 +124,7 @@ def handler_for(app):
             self.send_response(status)
             self.send_header('Content-Type', content)
             self.send_header('Content-Length', str(len(body)))
-            immutable = status == 200 and urlsplit(self.path).path.startswith(('/asset/', '/cached-asset/', '/api/texture-png/', '/api/icon/'))
+            immutable = status == 200 and urlsplit(self.path).path.startswith(('/asset/', '/cached-asset/', '/api/texture-png/', '/api/icon/', '/api/preset-preview/'))
             self.send_header('Cache-Control', 'private, max-age=31536000, immutable' if immutable else 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
@@ -219,7 +222,13 @@ def handler_for(app):
                 if path == '/furniture_categories.json':
                     return self.send(app.runtime.categories() if app.runtime else {'categories':{},'report':{'state':'not_ready'}})
                 if path == '/api/presets':
-                    return self.send({'presets': app.presets.list()})
+                    return self.send({'presets': [app.preset_previews.describe(row) for row in app.presets.list()]})
+                if path.startswith('/api/preset-preview/'):
+                    key = path.removeprefix('/api/preset-preview/').removesuffix('.png')
+                    file = app.preset_previews.path(key)
+                    if not file.is_file():
+                        return self.send({'error': '预览图尚未生成'}, status=404)
+                    return self.send(file.read_bytes(), content='image/png')
                 if path == '/api/presets/export':
                     return self.send(app.presets.export())
                 if path.startswith('/api/presets/export/'):
@@ -317,6 +326,8 @@ def handler_for(app):
                     return self.send(app.presets.rename(values.get('id'), values.get('name')))
                 if path == '/api/presets/import':
                     return self.send(app.presets.import_documents(values.get('documents')))
+                if path == '/api/presets/preview':
+                    return self.send(app.preset_previews.save(values.get('id'), values.get('key'), values.get('image')))
                 if path == '/api/presets/duplicate':
                     return self.send(app.presets.duplicate(values.get('id')))
                 if path == '/api/presets/delete':

@@ -1,5 +1,7 @@
 # 本地验收
 
+预设模型预览：`node tests/preset_preview_geometry.mjs` 验证横竖视口取景，`python -m unittest discover -s tests -p test_preset_previews.py` 验证 PNG、缓存版本和路径校验。源码网页验收覆盖 90 件与 1202 件真实预设，全部模型匹配，新增渲染器无着色器错误；打开及关闭预览后编辑文档版本、选择、主相机位置与目标保持不变。缺失 ID 的合成预设保留完整内容、显示线框和缺失提示，不生成完整缩略图缓存。两张真实缩略图均为 512 × 320。结果仅覆盖本机当前游戏与浏览器。
+
 自动测试使用自主生成的微型 IoStore 目录、PaperBin、JSON 和立方体 GLB。测试替换转换后端，真实 AES 索引解析、配置校验、HTTP API、缓存切换和更新冲突处理保持正式实现。合成导出通过不能证明真实 Unreal 包支持。
 
 `python -m unittest discover -s tests -v` 覆盖空配置、无预生成模型、首次请求生成、缓存命中、游戏更新检测、错误密钥拒绝、旧缓存保留、新版本隔离、HTTP Origin/token 和私有文件访问限制。

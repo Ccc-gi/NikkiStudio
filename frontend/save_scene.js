@@ -15,6 +15,7 @@ import {installWorkspacePlacement,localDragArrayLayout} from './workspace_placem
 import {installBuildLegality} from './build_legality.js';
 import {installSaveValidation} from './workspace_validation.js';
 import {installPresets} from './workspace_presets.js';
+import {installPresetPreview} from './preset_preview.js';
 import {NO_ANCHOR,groundAnchor,savePositionToScene,scenePositionToSave} from './preset_geometry.js';
 import {cloneLoadedFurniture} from './scene_duplicate.js';
 import {notify} from './notices.js';
@@ -178,7 +179,7 @@ document.querySelector('#fit').onclick=()=>{restoreVisibility();fit()};
 document.querySelector('#missing').onchange=()=>restoreVisibility();
 import {installSceneNavigation} from './scene_navigation.js?v=live-view-8';
 const sceneNavigation=installSceneNavigation(camera,controls,r.domElement,ray=>ray.intersectObjects([...group.children,...batches.pool.children,...scene.children.filter(o=>o.userData?.isNavigationGround)],true).find(h=>{if(!h.object.isMesh)return false;for(let o=h.object;o;o=o.parent)if(!o.visible)return false;return true;}));
-const ray=new T.Raycaster(),mouse=new T.Vector2();new ResizeObserver(()=>{r.setSize(panel.clientWidth,panel.clientHeight);camera.aspect=panel.clientWidth/panel.clientHeight;camera.updateProjectionMatrix()}).observe(panel);let lastMetrics=0,previousFrame=performance.now(),frameIntervals=[];r.setAnimationLoop(()=>{const now=performance.now();frameIntervals.push(now-previousFrame);previousFrame=now;if(frameIntervals.length>60)frameIntervals.shift();controls.update();sceneNavigation.update();renderQuality.update();placement.update();grassGround.update(camera,renderQuality.level,controls.target);r.render(scene,camera);if(performance.now()-lastMetrics>500){lastMetrics=performance.now();const p=document.querySelector('#performance');p.textContent=`每帧绘制 ${r.info.render.calls} 次 · 合批网格 ${batches.count} 个 / ${batches.batches.length} 批 · 缓存命中 ${loadingMetrics.cacheHits} / 下载 ${loadingMetrics.downloads} · 本地缓存${loadingMetrics.cacheState}`;p.dataset.frameIntervalMs=String(frameIntervals.reduce((a,b)=>a+b,0)/frameIntervals.length);p.dataset.frameMaxMs=String(Math.max(...frameIntervals));p.dataset.grassFlowers=String(grassGround.metrics.flowerCount??0);p.dataset.grassTall=String(grassGround.metrics.tallCount??0);p.dataset.flowerPalette=JSON.stringify(grassGround.metrics.flowerPalette??[]);p.dataset.grassTufts=String(grassGround.metrics.tuftCount??0);p.dataset.grassTiles=String(grassGround.metrics.visibleTiles??0);p.dataset.grassCpuMs=String(grassGround.metrics.cpuMs??0);p.dataset.grassPeakMs=String(grassGround.metrics.maxGenerationSliceMs??0);p.dataset.grassPending=String(grassGround.metrics.generationPending??false);p.dataset.drawCalls=String(r.info.render.calls);p.dataset.batched=String(batches.count);p.dataset.cacheHits=String(loadingMetrics.cacheHits);p.dataset.downloads=String(loadingMetrics.downloads);}});
+const ray=new T.Raycaster(),mouse=new T.Vector2();new ResizeObserver(()=>{r.setSize(panel.clientWidth,panel.clientHeight);camera.aspect=panel.clientWidth/panel.clientHeight;camera.updateProjectionMatrix()}).observe(panel);let lastMetrics=0,previousFrame=performance.now(),frameIntervals=[];r.setAnimationLoop(()=>{if(document.querySelector('#presetModelDialog')?.open){previousFrame=performance.now();return;}const now=performance.now();frameIntervals.push(now-previousFrame);previousFrame=now;if(frameIntervals.length>60)frameIntervals.shift();controls.update();sceneNavigation.update();renderQuality.update();placement.update();grassGround.update(camera,renderQuality.level,controls.target);r.render(scene,camera);if(performance.now()-lastMetrics>500){lastMetrics=performance.now();const p=document.querySelector('#performance');p.textContent=`每帧绘制 ${r.info.render.calls} 次 · 合批网格 ${batches.count} 个 / ${batches.batches.length} 批 · 缓存命中 ${loadingMetrics.cacheHits} / 下载 ${loadingMetrics.downloads} · 本地缓存${loadingMetrics.cacheState}`;p.dataset.frameIntervalMs=String(frameIntervals.reduce((a,b)=>a+b,0)/frameIntervals.length);p.dataset.frameMaxMs=String(Math.max(...frameIntervals));p.dataset.grassFlowers=String(grassGround.metrics.flowerCount??0);p.dataset.grassTall=String(grassGround.metrics.tallCount??0);p.dataset.flowerPalette=JSON.stringify(grassGround.metrics.flowerPalette??[]);p.dataset.grassTufts=String(grassGround.metrics.tuftCount??0);p.dataset.grassTiles=String(grassGround.metrics.visibleTiles??0);p.dataset.grassCpuMs=String(grassGround.metrics.cpuMs??0);p.dataset.grassPeakMs=String(grassGround.metrics.maxGenerationSliceMs??0);p.dataset.grassPending=String(grassGround.metrics.generationPending??false);p.dataset.drawCalls=String(r.info.render.calls);p.dataset.batched=String(batches.count);p.dataset.cacheHits=String(loadingMetrics.cacheHits);p.dataset.downloads=String(loadingMetrics.downloads);}});
 
 function isTilted(a){return Math.abs(a.rotation.x)>.01||Math.abs(a.rotation.z)>.01}
 function restoreVisibility(){viewMenu.applyVisibility();batches.sync(group)}
@@ -290,21 +291,42 @@ const placement=installWorkspacePlacement({scene,camera,canvas:r.domElement,pane
   onRotationStart:nodes=>startPlacementTransform(nodes,'rotate'),onRotationEnd:endPlacementTransform,
   onMoveStart:nodes=>startPlacementTransform(nodes,'translate'),onMoveEnd:endPlacementTransform,
   onFinish:cancelled=>{if(cancelled){attachTransformHandle();updateOutline();}}});
-async function loadPlacementItem(id){
-  const quality=materialQuality();
+async function loadPlacementItem(id,{quality=materialQuality(),colors=null,preview=false}={}){
   const asset=mapping[id];if(!asset?.path)throw Error('此物品尚无模型');
   const node=new T.Group(),mesh=new T.Group();node.add(mesh);
-  for(const component of asset.components??[{path:asset.path}]){
+  for(const [partIndex,component] of (asset.components??[{path:asset.path}]).entries()){
     const part=cloneSkeleton((await getModel(component.path)).scene),local=new T.Group();local.add(part);
     if(component.translation){const [x,y,z]=component.translation;local.position.set(x/100,z/100,y/100);}
     if(component.quaternion)local.quaternion.fromArray(unrealQuaternionToScene(component.quaternion));
     if(component.scale){const [x,y,z]=component.scale;local.scale.set(x,z,y);}
     if(component.matrix){local.matrix.fromArray(componentMatrixToScene(component.matrix));local.matrixAutoUpdate=false;}
-    assignMaterials(part,await prepareMaterial(component.path,asset,quality));mesh.add(local);
+    assignMaterials(part,await prepareMaterial(component.path,asset,quality,preview?Number(id):null,colors,partIndex));mesh.add(local);
   }
   applyModelBasis(mesh,asset);node.userData={id:Number(id),unmatched:false,textureQuality:quality,materialCounts:{textured:1,fallback:0}};
-  renderQuality.prepare(node);return node;
+  if(!preview)renderQuality.prepare(node);return node;
 }
+async function loadPresetPreview(items,{signal,onProgress}){
+  const previewGroup=new T.Group(),templates=new Map(),missing=new Set();let failed=0;
+  const check=()=>{if(signal.aborted)throw new DOMException('预览已取消','AbortError');};
+  try{for(const [index,item] of items.entries()){
+    check();const id=String(item.cfg_item_id),key=id+':'+JSON.stringify(item.colors??[]);let node;
+    try{
+      if(!templates.has(key))templates.set(key,(async()=>{
+        if(!mapping[id]?.path){const response=await fetch('/api/item/'+encodeURIComponent(id));if(!response.ok)throw Error('模型映射不可用');mapping[id]=await response.json();}
+        check();return loadPlacementItem(id,{quality:'preview',colors:item.colors,preview:true});
+      })());
+      node=cloneSkeleton(await templates.get(key));check();
+    }catch(error){if(error.name==='AbortError')throw error;failed++;missing.add(id);
+      node=new T.Mesh(new T.BoxGeometry(1,1,1),new T.MeshBasicMaterial({color:0xcb8557,wireframe:true}));node.userData.previewOwnedGeometry=true;node.userData.previewOwnedMaterial=true;
+    }
+    const position=savePositionToScene(item.trans.position,NO_ANCHOR);node.position.set(position.x,position.y,position.z);node.quaternion.fromArray(saveRotationToScene(item.trans.rotation));node.scale.set(item.trans.scale.x,item.trans.scale.z,item.trans.scale.y);previewGroup.add(node);
+    if(index%16===0||index===items.length-1)onProgress(index+1,items.length);
+    if(index%32===0)await nextFrame();
+  }check();return {group:previewGroup,total:items.length,failed,missing:[...missing]};
+  }catch(error){previewGroup.traverse(o=>{if(o.userData.previewOwnedGeometry)o.geometry.dispose();if(o.userData.previewOwnedMaterial)o.material.dispose();});throw error;}
+}
+const presetPreview=installPresetPreview({loadItems:loadPresetPreview,isReady:()=>readyRun===run&&!!saveDocument,
+  editorState:()=>({revision:saveDocument?.revision,name:saveDocument?.name,selected:[...selectedNodes].map(n=>n.userData.index),camera:camera.position.toArray(),quaternion:camera.quaternion.toArray(),target:controls.target.toArray()})});
 function placementPositions(nodes,offset){return nodes.map(node=>({x:(node.position.x+offset.x)*100,y:(node.position.z+offset.z)*100,z:(node.position.y+offset.y)*100}));}
 function renderProperties(){$('nearTop').disabled=!selectedNode||readyRun!==run;$('isolate').disabled=!selectedNode;dyePanel.render([...selectedNodes]);const a=selectedNode?.userData;$('properties').hidden=!a;$('emptySelection').hidden=!!a;for(const id of ['grab','arrayDuplicate','curveDuplicate','duplicate','delete','focusSelection'])$(id).disabled=!a||readyRun!==run;presetPanel?.setSaveEnabled(!!a&&readyRun===run);if(!a)return;if(selectedNodes.size>1){$('selectedName').textContent=`${selectedNodes.size} 件物品`;$('selectedMeta').textContent='多选模式 · 共用中心移动、旋转 · 局部轴参考最后选中物品';for(const kind of ['position','rotation','scale'])$(kind+'Fields').replaceChildren();$('applyProperties').disabled=true;buildLegality.decorate([...selectedNodes].map(n=>n.userData.id));return;}$('applyProperties').disabled=false;$('selectedName').textContent=furniture[a.id]?.name??'物品';$('selectedMeta').textContent=`物品 ID ${a.id} · 实例 ${a.instance} · ${a.unmatched?'模型未匹配':'真实模型'}`;
   const colors=dyeColorsForRow(a.raw);
@@ -428,7 +450,7 @@ async function placePreset(items,name){
 }
 presetPanel=installPresets({tab:$('presetTab'),panel:document.querySelector('.left-panel'),
   selectionName:presetSuggestedName,saveSelection:presetSelection,placeItems:placePreset,
-  missingItems:items=>[...new Set(items.filter(item=>!furniture[item.cfg_item_id]).map(item=>item.cfg_item_id))],notify});
+  missingItems:items=>[...new Set(items.filter(item=>!furniture[item.cfg_item_id]).map(item=>item.cfg_item_id))],preview:presetPreview,notify});
 async function addFurniture(id){if(!saveDocument||readyRun!==run)return;gizmo.detach();await placement.begin(async()=>[await loadPlacementItem(id)],furniture[id]?.name??'物品',(nodes,offset)=>{
   const started=performance.now(),node=nodes[0],index=saveDocument.add(id,placementPositions(nodes,offset)[0],readNodeTransform(node).rotation),a=parse([saveDocument.rows[index]])[0];
   setNodeEntry(node,a);entries.push(a);group.add(node);duplicateNodes.set(String(a.instance),node);renderQuality.prepare(node);finishDuplicateUpdate([node],started);status.textContent='已放置 '+(furniture[id]?.name??'物品');

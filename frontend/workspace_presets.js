@@ -17,7 +17,7 @@ function download(document_,name){
   const url=URL.createObjectURL(new Blob([JSON.stringify(document_,null,2)],{type:'application/json'})),a=document.createElement('a');
   a.href=url;a.download=name.replace(/[<>:"/\\|?*\u0000-\u001f]/g,'_')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
-export function installPresets({tab,panel,selectionName,saveSelection,placeItems,missingItems=()=>[],notify}){
+export function installPresets({tab,panel,selectionName,saveSelection,placeItems,missingItems=()=>[],preview,notify}){
   const container=document.createElement('div');container.id='presetPanel';container.hidden=true;container.className='preset-panel';
   container.innerHTML=`<div class="preset-actions"><button id="savePreset" class="primary" disabled>＋ 把选中存为预设</button><div class="preset-transfer"><button id="importPresets">导入预设</button><button id="exportPresets">导出全部备份</button></div></div><input id="presetImportFiles" type="file" accept=".json,application/json" multiple hidden><div class="preset-filters"><input id="presetSearch" type="search" placeholder="搜索预设名称" aria-label="搜索预设名称"><select id="presetSort" aria-label="预设排序"><option value="recent">最近保存</option><option value="name">名称</option><option value="size">物品数量</option></select></div><span id="presetCount" class="panel-note"></span><div id="presetList" class="object-list"></div><div class="panel-note" id="presetNote" role="status"></div><div class="preset-storage-note">保存在本机预设库 · 清理资源缓存不会删除<br>导出 JSON 可备份，也可在其他电脑导入</div>`;
   panel.append(container);
@@ -36,7 +36,12 @@ export function installPresets({tab,panel,selectionName,saveSelection,placeItems
   });}
   const $=id=>container.querySelector('#'+id),list=$('presetList'),save=$('savePreset'),note=$('presetNote'),tabs=[...document.querySelectorAll('.left-panel .tabs button')];
   let presets=[],busy=false,active=false,saveEnabled=false,message='',failed=false;
+  let observer;
+  preview?.subscribe((key,url)=>{for(const image of container.querySelectorAll('[data-preview-key]'))if(image.dataset.previewKey===key){image.src=url;image.hidden=false;image.closest('button').classList.remove('preview-pending');}});
   function render(){
+    observer?.disconnect();observer=new IntersectionObserver(entries=>{for(const entry of entries)if(entry.isIntersecting){observer.unobserve(entry.target);const button=entry.target,preset=presets.find(p=>p.id===button.dataset.presetId);if(!preset)return;
+      preview.thumbnail(preset).then(url=>{if(button.isConnected&&url){const image=button.querySelector('img');image.src=url;image.hidden=false;button.classList.remove('preview-pending');}}).catch(error=>{if(button.isConnected){button.classList.remove('preview-pending');button.title=error.name==='AbortError'?'点击生成模型预览':error.message;}});
+    }},{root:list});
     save.disabled=busy||!saveEnabled;$('importPresets').disabled=busy;$('exportPresets').disabled=busy||!presets.length;
     list.replaceChildren();const visible=filterPresets(presets,$('presetSearch').value,$('presetSort').value);
     $('presetCount').textContent=`${visible.length} / ${presets.length} 个预设`;
@@ -45,6 +50,11 @@ export function installPresets({tab,panel,selectionName,saveSelection,placeItems
     if(!visible.length){const empty=document.createElement('p');empty.className='preset-empty';empty.textContent=failed?'读取失败，请重新进入预设页重试。':presets.length?'没有符合搜索条件的预设。':'还没有预设。导入已有文件，或把场景中选中的物品存为预设。';list.append(empty);return;}
     for(const preset of visible){
       const row=document.createElement('div');row.className='preset-row';
+      if(preview){const view=document.createElement('button');view.className='preset-thumbnail preview-pending';view.dataset.presetId=preset.id;view.setAttribute('aria-label','查看预设模型 '+preset.name);view.title='查看模型：独立窗口，不改变当前场景';
+        const image=document.createElement('img');image.alt=preset.name;image.hidden=true;image.dataset.previewKey=preset.previewKey??'';
+        if(preset.previewUrl){image.src=preset.previewUrl;image.hidden=false;view.classList.remove('preview-pending');}
+        image.onerror=()=>{image.hidden=true;view.title='预览图需要重新生成，请点击查看模型';};
+        const caption=document.createElement('span');caption.textContent='查看模型';view.append(image,caption);view.onclick=()=>viewModel(preset);row.append(view);observer.observe(view);}
       const place=document.createElement('button');place.className='preset-place';place.setAttribute('aria-label','放置预设 '+preset.name);
       const title=document.createElement('strong'),meta=document.createElement('small');title.textContent=preset.name;meta.textContent=`${preset.items} 件${preset.savedAt?' · '+preset.savedAt.replace('T',' ').slice(0,16):''}`;place.append(title,meta);place.onclick=()=>use(preset);
       const menu=document.createElement('details');menu.className='preset-menu';const summary=document.createElement('summary');summary.textContent='⋯';summary.setAttribute('aria-label','管理预设 '+preset.name);menu.append(summary);
@@ -55,8 +65,8 @@ export function installPresets({tab,panel,selectionName,saveSelection,placeItems
   async function refresh(){
     busy=true;render();try{presets=(await request(ENDPOINT)).presets??[];failed=false;}catch(e){failed=true;message='预设读取失败：'+e.message;notify(message);}finally{busy=false;render();}
   }
-  function enter(){if(active)return;active=true;container.hidden=false;panel.classList.add('preset-mode');for(const button of tabs)button.classList.toggle('active',button===tab);message='';refresh();}
-  function leave(){active=false;container.hidden=true;panel.classList.remove('preset-mode');}
+  function enter(){if(active)return;active=true;preview?.setLibraryActive(true);container.hidden=false;panel.classList.add('preset-mode');for(const button of tabs)button.classList.toggle('active',button===tab);message='';refresh();}
+  function leave(){active=false;preview?.setLibraryActive(false);observer?.disconnect();container.hidden=true;panel.classList.remove('preset-mode');}
   tab.onclick=enter;$('presetSearch').oninput=render;$('presetSort').onchange=render;
   container.addEventListener('keydown',e=>{if(e.target.matches('input,select,summary')||e.target.closest('.preset-menu'))e.stopPropagation();});
   async function operation(work,success){
@@ -69,6 +79,7 @@ export function installPresets({tab,panel,selectionName,saveSelection,placeItems
       await placeItems(items,document_.name);message=`已拿起「${document_.name}」· ${items.length} 件 · 点场景放置`;
     }catch(e){message=e.message;notify('放置预设失败：'+message);}finally{busy=false;render();}
   }
+  async function viewModel(preset){try{const document_=await request(ENDPOINT+'/'+encodeURIComponent(preset.id));await preview.open(document_,preset);}catch(error){notify('模型预览失败：'+error.message);}}
   async function rename(preset){const name=await ask({title:'重命名预设',value:preset.name});if(name===null||name.trim()===preset.name)return;if(!name.trim())return notify('预设需要一个名字');await operation(()=>request(ENDPOINT+'/rename',{id:preset.id,name:name.trim()}),'已重命名预设');}
   async function duplicate(preset){await operation(()=>request(ENDPOINT+'/duplicate',{id:preset.id}),r=>'已复制为「'+r.name+'」');}
   async function remove(preset){if(!await ask({title:'删除预设',message:`删除「${preset.name}」？已放置的场景物品不受影响。建议先导出备份。`,confirmLabel:'删除'}))return;await operation(()=>request(ENDPOINT+'/delete',{id:preset.id}),'已删除预设：'+preset.name);}
