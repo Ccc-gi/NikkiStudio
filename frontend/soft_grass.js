@@ -10,7 +10,7 @@ export function createGrassTuftTexture(){
     const baseX=128+Math.sin(leaf*2.4)*25,tipX=128+side*(18+(leaf*37%83));
     const baseY=250,tipY=30+(leaf*31%95),width=8+(leaf*11%11);
     const gradient=c.createLinearGradient(baseX,baseY,tipX,tipY);
-    gradient.addColorStop(0,'#396f29');gradient.addColorStop(.35,'#639635');
+    gradient.addColorStop(0,'#56833c');gradient.addColorStop(.35,'#709e45');
     gradient.addColorStop(.78,leaf%3===0?'#a4c663':'#85b54d');gradient.addColorStop(1,'#b8cf75');
     c.fillStyle=gradient;c.beginPath();c.moveTo(baseX-width*.4,baseY);
     c.bezierCurveTo(baseX-width,baseY-50,tipX-side*32-width,tipY+35,tipX,tipY);
@@ -95,7 +95,7 @@ export function createSoftGrass(){
         box.min.set(tx*tileSize,groundY,tz*tileSize);box.max.set((tx+1)*tileSize,.4,(tz+1)*tileSize);
         if(!frustum.intersectsBox(box))continue;
         const distance=camera.position.distanceTo(box.getCenter(point));
-        const step=.29*Math.pow(2,Math.max(0,Math.floor(Math.log2(Math.max(1,distance/28)))));
+        const step=.24*Math.pow(2,Math.max(0,Math.floor(Math.log2(Math.max(1,distance/40)))));
         const cells=Math.max(1,Math.ceil(tileSize/step));estimate+=cells*cells;
         tiles.push({tx,tz,cells,nearby:obstacles.filter(b=>b.owner.visible&&b.maxX>box.min.x&&b.minX<box.max.x&&b.maxZ>box.min.z&&b.minZ<box.max.z)});
       }
@@ -109,10 +109,10 @@ export function createSoftGrass(){
         !frustum.containsPoint(point.set(x,groundY+.12,z))||nearby.some(b=>x>b.minX&&x<b.maxX&&z>b.minZ&&z<b.maxZ))continue;
       const patch=.5+.25*Math.sin(x*.43+Math.sin(z*.29))+.25*Math.sin(z*.51+x*.11);
       // Broad sparse and lush patches, rather than uniform needle-like coverage.
-      if(hash(ix,iz,6)>.60+patch*.38)continue;
+      if(hash(ix,iz,6)>.75+patch*.22)continue;
       dummy.position.set(x,-.115,z);dummy.rotation.set(0,hash(ix,iz,2)*Math.PI*2,0);
-      const width=.25+hash(ix,iz,3)*.12;
-      dummy.scale.set(width,.13+patch*.10+hash(ix,iz,4)*.045,width);
+      const width=.42+hash(ix,iz,3)*.18;
+      dummy.scale.set(width,.18+patch*.09+hash(ix,iz,4)*.045,width);
       dummy.updateMatrix();mesh.setMatrixAt(count,dummy.matrix);
       color.setRGB(.93+patch*.08,.94+patch*.08,.88+patch*.1).multiplyScalar(.93+hash(ix,iz,5)*.06);
       mesh.setColorAt(count,color);if(++count===capacity)break tufts;
