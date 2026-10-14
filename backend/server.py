@@ -119,7 +119,7 @@ def handler_for(app):
             self.send_response(status)
             self.send_header('Content-Type', content)
             self.send_header('Content-Length', str(len(body)))
-            immutable = status == 200 and urlsplit(self.path).path.startswith(('/asset/', '/cached-asset/', '/api/texture-png/'))
+            immutable = status == 200 and urlsplit(self.path).path.startswith(('/asset/', '/cached-asset/', '/api/texture-png/', '/api/icon/'))
             self.send_header('Cache-Control', 'private, max-age=31536000, immutable' if immutable else 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
@@ -160,6 +160,12 @@ def handler_for(app):
                     if version != app.runtime.version:
                         raise ValueError('Texture version mismatch')
                     return self.send(app.runtime.texture_fallback(relative).read_bytes(), 'image/png')
+                if path.startswith('/api/icon/'):
+                    if not app.runtime or not app.runtime.current():
+                        return self.send({'error':'游戏资源已变化，请重新校验；旧图标缓存保留'},status=409)
+                    version,relative=path.removeprefix('/api/icon/').split('/',1)
+                    if version!=app.runtime.version:raise ValueError('Icon version mismatch')
+                    return self.send(app.runtime.icon(relative).read_bytes(),'image/png')
                 if path.startswith('/api/cached-material/'):
                     version, relative = path.removeprefix('/api/cached-material/').split('/', 1)
                     if len(version) != 64 or any(c not in '0123456789abcdef' for c in version):
@@ -209,7 +215,7 @@ def handler_for(app):
                 if path == '/furniture_catalog.json':
                     return self.send(app.runtime.catalog() if app.runtime else {})
                 if path == '/furniture_categories.json':
-                    return self.send({'categories': {}})
+                    return self.send(app.runtime.categories() if app.runtime else {'categories':{},'report':{'state':'not_ready'}})
                 if path == '/save_validation_rules.json':
                     return self.send({'source': 'No current game constraints loaded', 'version': 'unverified',
                                       'constraints': {}, 'polygons': {}})

@@ -16,7 +16,7 @@ export function renderToolboxCategories(major,minor,categories,onChange){
       const button=document.createElement('button');button.type='button';button.className='category-tool';
       button.classList.toggle('active',select.value===option.value);button.setAttribute('aria-pressed',String(select.value===option.value));
       button.title=option.textContent;button.setAttribute('aria-label',option.textContent);
-      const icon=document.createElement('img');icon.src=categories[option.value]?.icon??'/placeholder.svg';icon.alt='';
+      const icon=document.createElement('img');icon.src=categories[option.value]?.icon??'/placeholder.svg';icon.alt='';icon.onerror=()=>{icon.onerror=null;icon.src='/placeholder.svg';};
       const name=document.createElement('span');name.textContent=option.textContent.replace(/ \(\d+\)$/,'').replace('全部大类','全部资源').replace('全部子类','全部');
       button.append(icon,name);button.onclick=()=>{select.value=option.value;if(select===major)minor.value='';onChange();};host.append(button);
     }

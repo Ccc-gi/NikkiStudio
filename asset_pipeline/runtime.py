@@ -18,6 +18,7 @@ from adapters.paperbin import parse as parse_paperbin
 from adapters.blueprint_transforms import BlueprintTransforms
 from adapters.archive_order import select_current
 from adapters.paperbin_dye import parse_dye
+from adapters.paperbin_catalog import parse_catalog
 
 
 def glb_document(path):
@@ -65,6 +66,11 @@ class Runtime:
         self.mapping = {}
         self.metadata = {}
         self.dye_configs = {}
+        self.catalog_items = {}
+        self.catalog_categories = {}
+        self.catalog_report = {}
+        self.ui_packages = set()
+        self._ui_sources = {}
         self.worker = None
         self._worker_guard = threading.Lock()
         self.metrics = {'exportProcesses': 0, 'cacheHits': 0, 'batchedModels': 0, 'modelBatches': 0}
@@ -92,6 +98,17 @@ class Runtime:
         paper_data = paper.read_bytes()
         self.rows = {str(k): v for k, v in parse_paperbin(paper_data).items()}
         self.dye_configs = parse_dye(paper_data)
+        try:
+            self.catalog_items,self.catalog_categories,self.catalog_report=parse_catalog(paper_data,self.rows)
+            write_json(self.directory/'catalog-v1.json',{'items':self.catalog_items,'categories':self.catalog_categories,'report':self.catalog_report})
+        except ValueError as error:
+            self.catalog_report={'schema':1,'state':'incompatible','error':str(error)}
+        for row in [*self.catalog_items.values(),*self.catalog_categories.values()]:
+            if row.get('sourceIcon'):self.icon_url(row['sourceIcon'])
+        for config in self.dye_configs.values():
+            for choices in config.values():
+                for entry in choices.values():
+                    entry['icon']=self.icon_url(entry.get('sourceIcon'))
         if self.config.get('metadataFile'):
             db = json.loads(Path(self.config['metadataFile']).read_text(encoding='utf-8-sig'))
             if not isinstance(db, dict) or not isinstance(db.get('d'), list):
@@ -496,9 +513,39 @@ class Runtime:
         return {'configs': configs, 'materials': {}, 'parts': parts}
 
     def catalog(self):
-        return {ident: {'name': self.metadata.get(ident, {}).get('name', '家具 ' + ident),
+        return {ident: {'name': self.catalog_items.get(ident, {}).get('name',self.metadata.get(ident, {}).get('name', '家具 ' + ident)),
                         'size': self.metadata.get(ident, {}).get('size', [100, 100, 100]),
-                        'previewIcon': '/placeholder.svg'} for ident in self.rows}
+                        'categoryId':self.catalog_items.get(ident,{}).get('categoryId','0'),
+                        'categorySource':'current-game PaperBin',
+                        'previewIcon':self.icon_url(self.catalog_items.get(ident,{}).get('sourceIcon')) or '/placeholder.svg'} for ident in self.rows}
+
+    def categories(self):
+        return {'categories':{ident:{**row,'icon':self.icon_url(row.get('sourceIcon')) or '/placeholder.svg'}
+                              for ident,row in self.catalog_categories.items()},'report':self.catalog_report}
+
+    def icon_url(self,reference):
+        if not reference:return None
+        package=package_path(reference)
+        source=package
+        if source not in self.by_package:
+            p=Path(package).relative_to('X6Game/Content')
+            source=(Path('X6Game/Content/__ExternalPaper2dAtlas__/SaveAtlas')/p.parent/'__Frames'/(p.stem+'_PNG.uasset')).as_posix()
+            if source not in self.by_package:return None
+        self._ui_sources[package]=source
+        self.ui_packages.add(package)
+        return '/api/icon/'+self.version+'/'+Path(package).with_suffix('.png').as_posix()
+
+    def icon(self,relative):
+        if Path(relative).suffix!='.png':raise ValueError('Invalid UI icon type')
+        package=package_path(Path(relative).with_suffix('.uasset').as_posix())
+        if package not in self.ui_packages:raise ValueError('Icon is not referenced by current game configuration')
+        root=self.directory/'ui-icons';target=root/Path(package).with_suffix('.png')
+        with self.lock:
+            if not target.is_file():
+                from asset_pipeline.ui_icons import export_icon
+                export_icon(self,self._ui_sources[package],target,root)
+        if not target.is_file():raise FileNotFoundError('Referenced game icon could not be exported')
+        return target
 
     def texture_fallback(self, relative):
         path = Path(relative)

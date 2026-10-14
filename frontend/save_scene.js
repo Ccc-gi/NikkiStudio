@@ -203,7 +203,11 @@ async function initial(){try{
   const recovery=new URLSearchParams(location.search).has('recovery');
   if((!state.ready||state.changed)&&!recovery){location.replace('/setup.html');return;}
   await buildLegality.ready;
-  [furniture,mapping,{categories}]=await Promise.all(['/furniture_catalog.json','/scene_mapping.json','/furniture_categories.json'].map(u=>fetch(u,{cache:'no-store'}).then(r=>r.json())));
+  const loaded=await Promise.all(['/furniture_catalog.json','/scene_mapping.json','/furniture_categories.json'].map(u=>fetch(u,{cache:'no-store'}).then(r=>r.json())));
+  [furniture,mapping]=loaded;categories=loaded[2].categories;
+  const report=loaded[2].report??{},catalogStatus=document.getElementById('catalogStatus');
+  catalogStatus.textContent=report.error??`当前游戏目录 · 名称 ${report.named??0} 款 · 已分类 ${report.classified??0} 款${report.missingItems?.length?` · ${report.missingItems.length} 款缺少目录记录，保留 ID 显示`:''}`;
+  if(report.error)catalogStatus.style.color='#edb68c';
   if(recovery){mapping=await fetch('/api/recovery-mapping').then(r=>r.json());document.querySelector('#runtimeNotice').textContent='旧缓存恢复视图：只显示已有模型，不代表当前游戏版本。';}
   openDocument({PlaceInfo:[]},'新家园存档.json');await rebuild();renderWorkspace();
   const saves=await fetch('/api/saves').then(r=>r.json());

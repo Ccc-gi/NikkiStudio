@@ -23,7 +23,7 @@ export function installDyePanel({host,configFor,onChange}){
           const entry=choices[index],button=document.createElement('button');button.type='button';button.className='dye-card';
           const text=index===0?'默认':`配色 ${index}`;
           button.title=text;button.setAttribute('aria-label',`${label.textContent} · ${text}`);button.setAttribute('aria-pressed',String(!mixed&&values[0]===index));button.disabled=busy;
-          if(entry?.idx!==undefined){const icon=document.createElement('img');icon.src=`/dye_icons/${entry.idx}.png`;icon.alt='';icon.loading='lazy';button.append(icon);}
+          if(entry?.icon){const icon=document.createElement('img');icon.src=entry.icon;icon.alt='';icon.loading='lazy';icon.onerror=()=>{icon.onerror=null;icon.src='/placeholder.svg';};button.append(icon);}
           else {const icon=document.createElement('span');icon.className='dye-default';icon.textContent='↺';button.append(icon);}
           const caption=document.createElement('span');caption.textContent=text;button.append(caption);
           button.onclick=async()=>{
