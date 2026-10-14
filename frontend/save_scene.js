@@ -427,7 +427,8 @@ async function placePreset(items,name){
   });
 }
 presetPanel=installPresets({tab:$('presetTab'),panel:document.querySelector('.left-panel'),
-  selectionName:presetSuggestedName,saveSelection:presetSelection,placeItems:placePreset,notify});
+  selectionName:presetSuggestedName,saveSelection:presetSelection,placeItems:placePreset,
+  missingItems:items=>[...new Set(items.filter(item=>!furniture[item.cfg_item_id]).map(item=>item.cfg_item_id))],notify});
 async function addFurniture(id){if(!saveDocument||readyRun!==run)return;gizmo.detach();await placement.begin(async()=>[await loadPlacementItem(id)],furniture[id]?.name??'物品',(nodes,offset)=>{
   const started=performance.now(),node=nodes[0],index=saveDocument.add(id,placementPositions(nodes,offset)[0],readNodeTransform(node).rotation),a=parse([saveDocument.rows[index]])[0];
   setNodeEntry(node,a);entries.push(a);group.add(node);duplicateNodes.set(String(a.instance),node);renderQuality.prepare(node);finishDuplicateUpdate([node],started);status.textContent='已放置 '+(furniture[id]?.name??'物品');

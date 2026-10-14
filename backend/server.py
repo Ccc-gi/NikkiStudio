@@ -220,6 +220,10 @@ def handler_for(app):
                     return self.send(app.runtime.categories() if app.runtime else {'categories':{},'report':{'state':'not_ready'}})
                 if path == '/api/presets':
                     return self.send({'presets': app.presets.list()})
+                if path == '/api/presets/export':
+                    return self.send(app.presets.export())
+                if path.startswith('/api/presets/export/'):
+                    return self.send(app.presets.export(path.removeprefix('/api/presets/export/')))
                 if path.startswith('/api/presets/'):
                     return self.send(app.presets.read(path.removeprefix('/api/presets/')))
                 if path == '/save_validation_rules.json':
@@ -311,6 +315,10 @@ def handler_for(app):
                     return self.send(app.presets.save(values.get('name'), values.get('items')))
                 if path == '/api/presets/rename':
                     return self.send(app.presets.rename(values.get('id'), values.get('name')))
+                if path == '/api/presets/import':
+                    return self.send(app.presets.import_documents(values.get('documents')))
+                if path == '/api/presets/duplicate':
+                    return self.send(app.presets.duplicate(values.get('id')))
                 if path == '/api/presets/delete':
                     return self.send(app.presets.remove(values.get('id')))
                 if path == '/api/browse':
