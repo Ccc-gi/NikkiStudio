@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>Nikki Studio · 庭院地面预览</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#22333b;color:#e4ece6;font:14px system-ui}
+canvas{display:block}nav{position:absolute;top:18px;left:18px;background:#23353be8;padding:14px 18px;border-radius:12px;max-width:420px}
+button,select{margin:10px 5px 0 0;padding:8px 12px;border:1px solid #67877c;border-radius:7px;background:#35594f;color:#eef4df}
+.environment-brightness{display:block;margin-top:8px}small{display:block;margin-top:6px;color:#bfcec1}
+</style>
+<nav><strong>庭院野草 · 地面预览</strong><small>与编辑器共用生成算法、图集及光照；不加载游戏素材。</small>
+<button id="close">近看草叶与小花</button><button id="wide">查看整片草地</button>
+<select id="quality" aria-label="渲染等级"><option value="fine">精细</option><option value="standard">标准</option><option value="light">轻量</option></select>
+<small id="note"></small><small id="stats"></small></nav>
+<script type="importmap">{"imports":{"three":"/vendor/build/three.module.js","three/addons/":"/vendor/examples/jsm/"}}</script>
+<script type="module">
+import * as T from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {createGrassGround} from './scene_ground.js';
+import {installRenderQuality} from './render_quality.js';
+import {worldRoot,sampleGarden} from './garden_growth.js';
+const renderer=new T.WebGLRenderer({antialias:true,logarithmicDepthBuffer:true});renderer.toneMapping=T.ACESFilmicToneMapping;
+document.body.prepend(renderer.domElement);const scene=new T.Scene(),camera=new T.PerspectiveCamera(45,1,.1,120);
+const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
+const sun=new T.DirectionalLight(),hemisphere=new T.HemisphereLight();scene.add(sun,hemisphere);
+const ground=createGrassGround(scene,renderer),group=new T.Group();ground.fitToFurniture(group);
+const quality=installRenderQuality({renderer,scene,camera,controls,sun,hemisphere,select:document.querySelector('#quality'),note:document.querySelector('#note')});quality.prepare(ground.ground);
+let spot={x:0,z:0},best=Infinity;
+for(let x=-25;x<25;x++)for(let z=-25;z<25;z++){
+  const root=worldRoot(x,z,1),p=sampleGarden(root.x,root.z,root.ix,root.iz),distance=Math.hypot(root.x,root.z);
+  if(p.flowering&&distance<best){best=distance;spot=root;}
+}
+function view(close){controls.target.set(spot.x,close?.05:0,spot.z);camera.position.set(spot.x+(close?1.8:8),close?1.1:5,spot.z+(close?2.4:10));controls.update();}
+document.querySelector('#close').onclick=()=>view(true);document.querySelector('#wide').onclick=()=>view(false);view(true);
+new ResizeObserver(()=>{renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}).observe(document.body);
+let last=0;renderer.setAnimationLoop(()=>{controls.update();quality.update();ground.update(camera,quality.level,controls.target);renderer.render(scene,camera);
+  if(performance.now()-last>500){last=performance.now();const m=ground.metrics,s=document.querySelector('#stats');
+    s.textContent=`草团 ${m.tuftCount??0} · 较长草团 ${m.tallCount??0} · 小花簇 ${m.flowerCount??0}`;s.dataset.flowers=String(m.flowerCount??0);s.dataset.palette=JSON.stringify(m.flowerPalette??[]);}
+});
+</script></html>

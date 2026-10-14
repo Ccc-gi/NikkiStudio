@@ -1,7 +1,7 @@
 import * as T from 'three';
 import assert from 'node:assert/strict';
 import {createSoftGrass} from '../frontend/soft_grass.js';
-globalThis.document={createElement:()=>({getContext:()=>({createLinearGradient:()=>({addColorStop(){}}),beginPath(){},moveTo(){},bezierCurveTo(){},closePath(){},fill(){}})})};
+import './canvas_stub.mjs';
 const group=new T.Group(),geometry=new T.BoxGeometry(2,.1,2);
 for(let i=0;i<700;i++){const m=new T.Mesh(geometry);m.position.set((i%35)*3-52,0,Math.floor(i/35)*3-30);group.add(m);}
 const lawn=createSoftGrass(),ground={visible:true,position:new T.Vector3(),scale:new T.Vector3(4000,4000,1)};
