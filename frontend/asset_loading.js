@@ -50,7 +50,7 @@ export async function modelBuffer(url) {
 }
 export async function textureBlob(url, quality='preview') {
   const {textures}=await assetManifest, desc=textures[url];
-  const target=quality==='preview'&&desc ? desc.preview : url;
+  const target=quality!=='original'&&desc ? desc.preview : url;
   try{return await (await assetResponse(target,desc?.version)).blob();}
   catch(e){if(target===url)throw e;return (await assetResponse(url,desc?.version)).blob();}
 }

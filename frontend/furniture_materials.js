@@ -4,6 +4,7 @@ import {textureQueue,textureBlob,textureBuffer} from './asset_loading.js';
 import {applyFoliageShading} from './foliage_material.js';
 import {applyRockGrass} from './rock_grass_material.js';
 import {resolveDyePlan,resolveDyeDescriptor,applyDyeShader} from './furniture_dye.js';
+import {applyTextureQuality} from './texture_quality.js';
 
 let dyeManifest=fetch('/furniture_dye_manifest.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('染色映射加载失败');return r.json();});
 export function updateDyeManifest(data){dyeManifest=Promise.resolve(data);}
@@ -29,7 +30,7 @@ async function loadTexture(url,quality){
     const format=new DataView(buffer).getUint32(12,true);
     const extension=format===145?'EXT_texture_compression_bptc':format===139||format===141?'EXT_texture_compression_rgtc':'WEBGL_compressed_texture_s3tc';
     if(!textureRenderer?.extensions.has(extension))return loadTexture(url.replace('/asset/','/api/texture-png/').replace('.ktx2','.png'),quality);
-    return new Promise((resolve,reject)=>gpuLoader.parse(buffer,resolve,reject));
+    return new Promise((resolve,reject)=>gpuLoader.parse(buffer,t=>resolve(applyTextureQuality(t,quality)),reject));
   }
   const objectUrl=URL.createObjectURL(await textureBlob(url,quality));
   try{return await loader.loadAsync(objectUrl);}finally{URL.revokeObjectURL(objectUrl);}

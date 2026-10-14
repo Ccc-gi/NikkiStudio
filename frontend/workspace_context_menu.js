@@ -30,7 +30,7 @@ export function installWorkspaceContextMenu({canvas,panel,nodes,selection,pick,s
     if(action==='hide'||action==='hideSame'){for(const key of action==='hideSame'?sameItemInstances(nodes(),ids):selected)hidden.add(key);}else mode=action;
     persist();refresh();onVisibility();onChange(`${text} · 仅影响视图，点击“恢复场景”退出`);
   }
-  function applyVisibility(){for(const node of nodes())node.visible=(!node.userData.unmatched||document.querySelector('#missing').checked)&&!hidden.has(String(node.userData.instance))&&viewMatches(node,mode,selected,ids,categories,catalog());
+  function applyVisibility(){const isolate=document.querySelector('#isolate').checked&&selection().size>0;for(const node of nodes())node.visible=(!node.userData.unmatched||document.querySelector('#missing').checked)&&!hidden.has(String(node.userData.instance))&&(!isolate||selection().has(node))&&viewMatches(node,mode,selected,ids,categories,catalog());
     const count=nodes().filter(n=>n.visible).length;badge.hidden=!mode&&!hidden.size;label.textContent=`${mode==='ghost'?'半透明参照':mode?'隔离显示':'临时隐藏'} · ${count} 件`;panel.dataset.viewMode=mode|| (hidden.size?'hidden':'all');panel.dataset.visibleFurniture=String(count);
   }
   function restoreMaterials(){const dispose=new Set();for(const {mesh,original,material} of ghosts){if(mesh.material===material)mesh.material=original;for(const m of Array.isArray(material)?material:[material])dispose.add(m);}for(const m of dispose)m.dispose();ghosts=[];}

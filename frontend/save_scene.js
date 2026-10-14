@@ -1,3 +1,6 @@
+import {textureQualityForLevel} from './texture_quality.js';
+import {installWorkspaceSettings} from './workspace_settings.js';
+installWorkspaceSettings();
 import {installGameFiles} from './workspace_game_files.js';
 import {prepareScene} from './scene_prepare.js';
 import {updateDyeManifest,updateMaterialManifest} from './furniture_materials.js';
@@ -27,18 +30,19 @@ const loader=new GLTFLoader(),cache=new Map();
 
 function num(v,defaultValue=0){const x=Number(v);if(!Number.isFinite(x))throw Error('存档含有无效数字');return v===undefined?defaultValue:x}
 function parse(raw){const rows=Array.isArray(raw)?raw:raw.Snapshots??raw.PlaceInfo;if(rows&&typeof rows==='object'&&!Array.isArray(rows)&&Object.keys(rows).length===0)return [];if(!Array.isArray(rows))throw Error('未识别到 Snapshots、PlaceInfo 或 BuildRecord 数组');return rows.map((a,i)=>{const f=a.furnitureInfo,t=f?.trans;return {id:num(f?.cfg_item_id??a.ItemID),instance:a.instanceID??a.InstanceID,position:t?{x:num(t.position?.x),y:num(t.position?.y),z:num(t.position?.z)}:{x:num(a.Location?.X),y:num(a.Location?.Y),z:num(a.Location?.Z)},rotation:t?{x:num(t.rotation?.x),y:num(t.rotation?.y),z:num(t.rotation?.z)}:{x:num(a.Rotation?.Pitch),y:num(a.Rotation?.Yaw),z:num(a.Rotation?.Roll)},scale:t?{x:num(t.scale?.x,1),y:num(t.scale?.y,1),z:num(t.scale?.z,1)}:{x:num(a.Scale?.X,1),y:num(a.Scale?.Y,1),z:num(a.Scale?.Z,1)},raw:a}})}
-function fit(stonesOnly=false,selectedId=null){const b=new T.Box3();group.children.filter(o=>o.visible&&(!selectedId||String(o.userData.id)===String(selectedId))&&(!stonesOnly||mapping[o.userData.id]?.textures?.color)).forEach(o=>b.union(new T.Box3().setFromObject(o)));if(b.isEmpty())return;const c=b.getCenter(new T.Vector3()),s=b.getSize(new T.Vector3()),angle=Math.min(T.MathUtils.degToRad(45),2*Math.atan(Math.tan(T.MathUtils.degToRad(22.5))*camera.aspect)),d=Math.max(1,Math.max(s.x,s.y,s.z)/2/Math.tan(angle/2)*1.1);controls.target.copy(c);camera.position.copy(c).add(new T.Vector3(.9,.35,1).normalize().multiplyScalar(d));camera.far=Math.max(5000,d*12);camera.updateProjectionMatrix();controls.update()}
+function fit(){const b=new T.Box3();group.children.filter(o=>o.visible).forEach(o=>b.union(new T.Box3().setFromObject(o)));if(b.isEmpty())return;const c=b.getCenter(new T.Vector3()),s=b.getSize(new T.Vector3()),angle=Math.min(T.MathUtils.degToRad(45),2*Math.atan(Math.tan(T.MathUtils.degToRad(22.5))*camera.aspect)),d=Math.max(1,Math.max(s.x,s.y,s.z)/2/Math.tan(angle/2)*1.1);controls.target.copy(c);camera.position.copy(c).add(new T.Vector3(.9,.35,1).normalize().multiplyScalar(d));camera.far=Math.max(5000,d*12);camera.updateProjectionMatrix();controls.update()}
 
 const batches=new FurnitureInstances(scene),summary=document.querySelector('#summary');
 const prepared=new Map(),materialQueue=createQueue(16);
 const duplicateNodes=new Map();
-let run=0,readyRun=0,geometrySeconds=0;
+let run=0,readyRun=0,geometrySeconds=0,qualityUpdate=0;
 const nextFrame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
 function getModel(path){
   if(!cache.has(path))cache.set(path,modelQueue(async()=>loader.parseAsync(await modelBuffer(path),new URL('.',new URL(path,location.href)).href)).catch(error=>{cache.delete(path);throw error;}));
   return cache.get(path);
 }
-async function prepareMaterial(path,asset,quality='preview',id=null,colors=null,partIndex=0){
+function materialQuality(){return textureQualityForLevel(renderQuality.level);}
+async function prepareMaterial(path,asset,quality=materialQuality(),id=null,colors=null,partIndex=0){
   const dye=await furnitureDyeContext(id,colors,partIndex);
   const key=path+':'+JSON.stringify(asset.textures??{})+':'+quality+':'+dye.key+':'+dye.offset+':'+JSON.stringify(dye.missing);
   if(!prepared.has(key))prepared.set(key,materialQueue(async()=>{
@@ -72,7 +76,7 @@ async function rebuild(preserveView=false){
   }
   if(requestRun!==run)return;
   gizmo.detach();outline.visible=false;selectedNodes.clear();selectionHighlighter.clear();clearSelectionOutlines();selectedIndex=-1;for(const id of ['exportSave','grab','arrayDuplicate','curveDuplicate','duplicate','delete','undo','redo'])$(id).disabled=true;
-  const token=++run;readyRun=0;selectedNode=null;document.querySelector('#highDetail').disabled=true;
+  const token=++run;readyRun=0;selectedNode=null;
   batches.clear();scene.remove(group);group=new T.Group();scene.add(group);
   let matched=0,missing=0,failed=0,partial=0,textured=0,materialFallback=0;const materialJobs=[];
   summary.dataset.loadSeconds='';summary.dataset.geometrySeconds='';summary.dataset.phase='geometry';
@@ -107,15 +111,15 @@ async function rebuild(preserveView=false){
     if(performance.now()-yielded>12){summary.textContent=`模型 ${group.children.length}/${entries.length} · 贴图将在模型显示后补齐`;await nextFrame();yielded=performance.now();}
   }
   geometrySeconds=(performance.now()-started)/1000;summary.dataset.geometrySeconds=geometrySeconds.toFixed(2);
-  const geometryReady=performance.now();grassGround.fitToFurniture(group);updateRotatedList();if(!preserveView)fit();refreshBatches();readyRun=token;renderWorkspace();await nextFrame();summary.dataset.geometrySetupMs=(performance.now()-geometryReady).toFixed(1);
+  const geometryReady=performance.now();grassGround.fitToFurniture(group);if(!preserveView)fit();refreshBatches();readyRun=token;renderWorkspace();await nextFrame();summary.dataset.geometrySetupMs=(performance.now()-geometryReady).toFixed(1);
   summary.dataset.phase='textures';let finished=0;
   if(sceneCompletion){const result=await sceneCompletion;if(token!==run)return;summary.dataset.backendSeconds=result.allSeconds.toFixed(2);updateMaterialManifest(result.materials);updateDyeManifest(result.dye);}
-  const materialsStarted=performance.now();
+  const materialsStarted=performance.now(),quality=materialQuality();
   await Promise.all(materialJobs.map(async({node,parts,asset})=>{
-    const results=await Promise.all(parts.map(({path},i)=>prepareMaterial(path,asset,'preview',node.userData.id,dyeColorsForRow(node.userData.raw),i)));
+    const results=await Promise.all(parts.map(({path},i)=>prepareMaterial(path,asset,quality,node.userData.id,dyeColorsForRow(node.userData.raw),i)));
     if(token!==run)return;
     const counts={textured:0,fallback:0};parts.forEach(({part},i)=>{assignMaterials(part,results[i]);counts.textured+=results[i].counts.textured;counts.fallback+=results[i].counts.fallback;});
-    node.userData.materialCounts=counts;if(counts.textured)textured++;if(counts.fallback)materialFallback++;finished++;
+    node.userData.textureQuality=quality;node.userData.materialCounts=counts;if(counts.textured)textured++;if(counts.fallback)materialFallback++;finished++;
     node.userData.dyeIssues=[...new Set(results.flatMap(x=>x.counts.dyeIssues??[]))];
     node.userData.dyedSlots=results.reduce((n,x)=>n+(x.counts.dyedSlots??0),0);
     summary.textContent=`模型 ${matched}/${entries.length} 已显示（${geometrySeconds.toFixed(1)} 秒） · 贴图 ${finished}/${materialJobs.length}`;
@@ -123,7 +127,7 @@ async function rebuild(preserveView=false){
   if(token!==run)return;
   summary.dataset.materialsMs=(performance.now()-materialsStarted).toFixed(1);
   // Material identity determines batching, so rebuild after preview materials resolve.
-  const batchesStarted=performance.now();refreshBatches();applyClay();readyRun=token;document.querySelector('#highDetail').disabled=false;summary.dataset.finalBatchesMs=(performance.now()-batchesStarted).toFixed(1);
+  const batchesStarted=performance.now();refreshBatches();applyClay();readyRun=token;renderProperties();summary.dataset.finalBatchesMs=(performance.now()-batchesStarted).toFixed(1);
   const seconds=(performance.now()-started)/1000;
   const dyeRequested=group.children.filter(n=>decodeDyeColors(dyeColorsForRow(n.userData.raw)).size);
   const dyePending=dyeRequested.filter(n=>n.userData.dyeIssues?.length||!n.userData.dyedSlots).length;
@@ -133,47 +137,51 @@ async function rebuild(preserveView=false){
   Object.assign(summary.dataset,{loadSeconds:seconds.toFixed(2),phase:'complete',matched:String(matched),missing:String(missing),failed:String(failed),textured:String(textured),textureErrors:String(materialDiagnostics.errors.size),mipmappedTextures:String(materialDiagnostics.mipmapped.size)});
   summary.textContent=`物品 ${matched}/${entries.length} · 有贴图 ${textured} 件 · 含待补材质 ${materialFallback} 件 · 贴图加载失败 ${materialDiagnostics.errors.size} · 模型 ${geometrySeconds.toFixed(1)} 秒 / 全部预览 ${seconds.toFixed(1)} 秒`;
   renderWorkspace();
+  updateSceneTextureQuality();
   summary.textContent+=` · 染色已匹配 ${dyeRequested.length-dyePending} / 待补 ${dyePending}`;
   status.textContent=`共 ${entries.length} 件物品 · 真实模型 ${matched} · 占位 ${missing} · 模型加载失败 ${failed} · 特殊物品待校准 ${partial} · 多轴旋转 ${entries.filter(isTilted).length}。模型和材质从当前游戏按需加载。存档染色已接入；缺少的分区配置或贴图保留默认外观，蓝图运行时姿态仍待校准。`;
 }
 function refreshBatches(){selectionHighlighter.clear();batches.clear();viewMenu.restoreMaterials();setClayMode(group,document.querySelector('#clay').checked);viewMenu.prepareMaterials();viewMenu.applyVisibility();renderQuality.prepare(group);grassGround.invalidate(group);if(document.querySelector('#batchRendering').checked)batches.rebuild(group);else batches.clear();updateOutline();}
 document.querySelector('#batchRendering').onchange=()=>{refreshBatches();applyClay();};
 function applyClay(){refreshBatches();}
-async function highDetail(){
-  const v=document.querySelector('#rotated').value,node=v===''?selectedNode:group.children[Number(v)],token=run;
-  if(!node||node.userData.unmatched||readyRun!==run){status.textContent='请先点击或定位一件物品，再加载高清贴图。';return;}
-  const button=document.querySelector('#highDetail');button.disabled=true;
+let selectedNode=null;
+async function updateSceneTextureQuality(){
+  const request=++qualityUpdate,loadRun=run,quality=materialQuality();
+  if(readyRun!==run||summary.dataset.phase!=='complete')return;
+  const nodes=group.children.filter(n=>!n.userData.unmatched&&n.userData.textureQuality!==quality);
+  const note=document.getElementById('textureQualityStatus');
+  if(!nodes.length){note.textContent=quality==='original'?'原始高清贴图已就绪':quality==='light'?'轻量贴图已就绪':'预览贴图已就绪';note.dataset.quality=quality;return;}
+  note.textContent='正在切换贴图质量…';
   try{
-    const asset=mapping[node.userData.id],components=asset.components??[{path:asset.path}];status.textContent='正在加载选中物品的原始高清贴图…';
-    const results=await Promise.all(components.map((c,i)=>prepareMaterial(c.path,asset,'original',node.userData.id,dyeColorsForRow(node.userData.raw),i)));
-    if(token!==run)return;
-    selectionHighlighter.clear();batches.clear();node.children[0].children.forEach((local,i)=>assignMaterials(local.children[0],results[i]));
-    node.userData.highDetail=true;refreshBatches();applyClay();status.textContent=(furniture[node.userData.id]?.name??'物品')+' · 实例 '+node.userData.instance+' · 原始高清贴图已加载';
-  }catch(e){status.textContent='高清贴图加载失败：'+e.message;}finally{if(token===run)button.disabled=false;}
+    const resolved=await Promise.all(nodes.map(async node=>{
+      const asset=mapping[node.userData.id],colors=dyeColorsForRow(node.userData.raw),colorKey=JSON.stringify(colors);
+      const results=await Promise.all((asset.components??[{path:asset.path}]).map((c,i)=>prepareMaterial(c.path,asset,quality,node.userData.id,colors,i)));
+      return {node,results,colorKey};
+    }));
+    if(request!==qualityUpdate||loadRun!==run||quality!==materialQuality())return;
+    selectionHighlighter.clear();batches.clear();viewMenu.restoreMaterials();
+    for(const {node,results,colorKey} of resolved){
+      if(node.parent!==group||JSON.stringify(dyeColorsForRow(node.userData.raw))!==colorKey)continue;
+      node.children[0].children.forEach((local,i)=>assignMaterials(local.children[0],results[i]));
+      node.userData.textureQuality=quality;
+    }
+    refreshBatches();note.textContent=quality==='original'?'原始高清贴图已就绪':quality==='light'?'轻量贴图已就绪':'预览贴图已就绪';
+    note.dataset.quality=quality;
+  }catch(e){if(request===qualityUpdate&&loadRun===run)note.textContent='贴图切换失败：'+e.message;}
 }
-let selectedNode=null;document.querySelector('#highDetail').onclick=highDetail;
-document.querySelector('#save').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;e.target.value='';openDocument(JSON.parse(await file.text()),file.name);await rebuild();renderWorkspace()}catch(e){status.textContent='导入失败：'+e.message}};document.querySelector('#mapping').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;mapping=JSON.parse(await file.text());await rebuild()}catch(e){status.textContent='模型映射失败：'+e.message}};document.querySelector('#fit').onclick=()=>{document.querySelector('#rotated').value='';restoreVisibility();fit()};document.querySelector('#special').onchange=e=>{if(!e.target.value)return;document.querySelector('#rotated').value='';restoreVisibility();fit(false,e.target.value);const a=mapping[e.target.value];status.textContent=(furniture[e.target.value]?.name??'物品')+' · '+(a?.components?.length??0)+' 个模型组件 · '+(a?.complete?'组件模型已导入':'模型已导入；动画、特效及运行时部件待校准');};document.querySelector('#stones').onclick=()=>{document.querySelector('#rotated').value='';restoreVisibility();fit(true)};document.querySelector('#missing').onchange=e=>{inspectRotation()};import {installSceneNavigation} from './scene_navigation.js?v=live-view-8';
+
+document.querySelector('#save').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;e.target.value='';openDocument(JSON.parse(await file.text()),file.name);await rebuild();renderWorkspace()}catch(e){status.textContent='导入失败：'+e.message}};
+document.querySelector('#fit').onclick=()=>{restoreVisibility();fit()};
+document.querySelector('#missing').onchange=()=>restoreVisibility();
+import {installSceneNavigation} from './scene_navigation.js?v=live-view-8';
 const sceneNavigation=installSceneNavigation(camera,controls,r.domElement,ray=>ray.intersectObjects([...group.children,...batches.pool.children,...scene.children.filter(o=>o.userData?.isNavigationGround)],true).find(h=>{if(!h.object.isMesh)return false;for(let o=h.object;o;o=o.parent)if(!o.visible)return false;return true;}));
 const ray=new T.Raycaster(),mouse=new T.Vector2();new ResizeObserver(()=>{r.setSize(panel.clientWidth,panel.clientHeight);camera.aspect=panel.clientWidth/panel.clientHeight;camera.updateProjectionMatrix()}).observe(panel);let lastMetrics=0,previousFrame=performance.now(),frameIntervals=[];r.setAnimationLoop(()=>{const now=performance.now();frameIntervals.push(now-previousFrame);previousFrame=now;if(frameIntervals.length>60)frameIntervals.shift();controls.update();sceneNavigation.update();renderQuality.update();placement.update();grassGround.update(camera,renderQuality.level,controls.target);r.render(scene,camera);if(performance.now()-lastMetrics>500){lastMetrics=performance.now();const p=document.querySelector('#performance');p.textContent=`每帧绘制 ${r.info.render.calls} 次 · 合批网格 ${batches.count} 个 / ${batches.batches.length} 批 · 缓存命中 ${loadingMetrics.cacheHits} / 下载 ${loadingMetrics.downloads} · 本地缓存${loadingMetrics.cacheState}`;p.dataset.frameIntervalMs=String(frameIntervals.reduce((a,b)=>a+b,0)/frameIntervals.length);p.dataset.frameMaxMs=String(Math.max(...frameIntervals));p.dataset.grassFlowers=String(grassGround.metrics.flowerCount??0);p.dataset.grassTall=String(grassGround.metrics.tallCount??0);p.dataset.flowerPalette=JSON.stringify(grassGround.metrics.flowerPalette??[]);p.dataset.grassTufts=String(grassGround.metrics.tuftCount??0);p.dataset.grassTiles=String(grassGround.metrics.visibleTiles??0);p.dataset.grassCpuMs=String(grassGround.metrics.cpuMs??0);p.dataset.grassPeakMs=String(grassGround.metrics.maxGenerationSliceMs??0);p.dataset.grassPending=String(grassGround.metrics.generationPending??false);p.dataset.drawCalls=String(r.info.render.calls);p.dataset.batched=String(batches.count);p.dataset.cacheHits=String(loadingMetrics.cacheHits);p.dataset.downloads=String(loadingMetrics.downloads);}});
 
 function isTilted(a){return Math.abs(a.rotation.x)>.01||Math.abs(a.rotation.z)>.01}
-function rotationLabel(a){return ' · 存档角度 X轴侧倾 Roll '+a.rotation.z.toFixed(2)+'° / Y轴俯仰 Pitch '+a.rotation.x.toFixed(2)+'° / Z轴朝向 Yaw '+a.rotation.y.toFixed(2)+'°'}
 function restoreVisibility(){viewMenu.applyVisibility();batches.sync(group)}
-function updateRotatedList(){const select=$('rotated');select.replaceChildren(new Option('选择单件检查',''));entries.forEach((a,i)=>{const option=new Option((furniture[a.id]?.name??a.id)+' · 实例 '+a.instance+' · Yaw '+a.rotation.y.toFixed(1)+'° / Pitch '+a.rotation.x.toFixed(1)+'° / Roll '+a.rotation.z.toFixed(1)+'°',String(i));option.dataset.instance=String(a.instance);select.add(option);});}
-function syncRotatedList(){
-  const select=$('rotated'),options=new Map(Array.from(select.options).slice(1).map(o=>[o.dataset.instance,o]));
-  const keep=new Set(entries.map(a=>String(a.instance)));
-  for(const [id,option] of options)if(!keep.has(id))option.remove();
-  entries.forEach((a,i)=>{const id=String(a.instance);let option=options.get(id);if(!option){option=new Option((furniture[a.id]?.name??a.id)+' · 实例 '+a.instance,String(i));option.dataset.instance=id;}if(option.value!==String(i))option.value=String(i);if(select.options[i+1]!==option)select.insertBefore(option,select.options[i+1]??null);});
-}
-
 document.querySelector('#nearTop').onclick=()=>{if(!selectedNode)return;restoreVisibility();batches.sync(group);const c=selectedNode.position.clone();controls.target.copy(c);camera.position.copy(c).add(new T.Vector3(0,22,.001));camera.lookAt(c);controls.update();};
-function inspectRotation(){viewMenu.applyVisibility();const v=document.querySelector('#rotated').value;if(v==='')return;const node=group.children[Number(v)];if(!node)return;node.visible=true;if(document.querySelector('#isolate').checked)group.children.forEach(o=>o.visible=o===node);batches.sync(group);selectedNode=node;selectEditorNode(node);const a=node.userData;const b=new T.Box3().setFromObject(node),c=b.getCenter(new T.Vector3()),s=b.getSize(new T.Vector3()),d=Math.max(1,s.length()*1.6);controls.target.copy(c);camera.position.copy(c).add(new T.Vector3(.8,.6,1).normalize().multiplyScalar(d));camera.far=Math.max(5000,d*12);camera.updateProjectionMatrix();controls.update();status.textContent=(furniture[a.id]?.name??'物品')+' · ID '+a.id+' · 实例 '+a.instance+rotationLabel(a)+' · 已叠加模型组件局部旋转'+basisLabel(a)+(mapping[a.id]?.complete===false?'；该物品的蓝图运行时姿态仍待校准':'')}
-function basisLabel(a){if(mapping[a.id]?.blueprintTransformVersion===2)return ' · 蓝图完整父子变换（'+(mapping[a.id].components.some(c=>c.blueprintAttachmentChain?.includes('StaticMeshRoot'))?'含 StaticMeshRoot 朝向校准':'直接物品坐标系')+'）';if(mapping[a.id]?.transformSpace==='actor'&&!mapping[a.id]?.modelRotation)return ' · 蓝图组件按物品坐标系还原（保留组件旋转）';const offset=mapping[a.id]?.staticMeshRootOffset;if(offset?.some(v=>Math.abs(v)>1e-5))return ' · 已应用游戏模型根偏移 '+offset.map(v=>v.toFixed(2)).join(', ')+' cm';return a.unmatched?'':mapping[a.id]?.modelRotation?' · 物品独立模型朝向 '+mapping[a.id].modelRotation.y+'°':document.querySelector('#basis').checked?' · 统一模型基础朝向 '+document.querySelector('#basisAngle').value+'°（待游戏对照）':' · 原始模型朝向（未校准）'}
-function applyModelBasis(mesh,asset){const enabled=document.querySelector('#basis').checked,yaw=Number(document.querySelector('#basisAngle').value);mesh.quaternion.fromArray(furnitureModelRotationToScene(asset,enabled,yaw));mesh.position.fromArray(furnitureModelPositionToScene(asset,enabled,yaw));}
-function updateModelBasis(){for(const o of group.children){if(!o.userData.unmatched)applyModelBasis(o.children[0],mapping[o.userData.id]);}batches.sync(group);attachTransformHandle();if(document.querySelector('#rotated').value!==''){const a=group.children[Number(document.querySelector('#rotated').value)].userData;status.textContent=(furniture[a.id]?.name??'物品')+' · 实例 '+a.instance+rotationLabel(a)+basisLabel(a);}else status.textContent='已'+(document.querySelector('#basis').checked?'开启':'关闭')+'统一模型朝向校准；存档位置、旋转、缩放保持原值。'};
-document.querySelector('#basis').onchange=updateModelBasis;document.querySelector('#basisAngle').onchange=updateModelBasis;
-document.querySelector('#rotated').onchange=inspectRotation;document.querySelector('#isolate').onchange=inspectRotation;
+function applyModelBasis(mesh,asset){mesh.quaternion.fromArray(furnitureModelRotationToScene(asset,true,-90));mesh.position.fromArray(furnitureModelPositionToScene(asset,true,-90));}
+document.querySelector('#isolate').onchange=()=>{restoreVisibility();renderList();};
 
 document.querySelector("#clay").onchange=applyClay;
 document.querySelector("#grassGround").onchange=e=>grassGround.ground.visible=e.target.checked;document.querySelector("#showGrid").onchange=e=>grid.visible=e.target.checked;
@@ -185,7 +193,7 @@ async function showBuildVersion(){
 }
 document.querySelector('#refreshMapping').onclick=async()=>{
   const button=document.querySelector('#refreshMapping');button.disabled=true;
-  try{const response=await fetch('/scene_mapping.json',{cache:'no-store'});if(!response.ok)throw new Error(response.status);mapping=await response.json();document.querySelector('#mapping').value='';await rebuild();await showBuildVersion();}
+  try{const response=await fetch('/scene_mapping.json',{cache:'no-store'});if(!response.ok)throw new Error(response.status);mapping=await response.json();await rebuild();await showBuildVersion();}
   catch(e){status.textContent='更新资源映射失败：'+e.message;}finally{button.disabled=false;}
 };
 showBuildVersion();
@@ -213,7 +221,7 @@ let saveDocument=null,selectedIndex=-1,libraryMode=false,editorMode='select',dra
 const selectionHighlighter=new SelectionHighlight(()=>renderQuality.level);
 const sceneRows=new Map();
 const selectedNodes=new Set(),selectionOutlines=new T.Group();scene.add(selectionOutlines);
-renderQuality.onLevelChange(()=>selectionHighlighter.apply(selectedNodes,batches));
+renderQuality.onLevelChange(()=>{selectionHighlighter.apply(selectedNodes,batches);updateSceneTextureQuality();});
 const $=id=>document.getElementById(id);
 const dyePanel=installDyePanel({host:$('dyePanel'),configFor:furnitureDyeConfig,onChange:changeSelectedDye});
 const gizmo=new TransformControls(camera,r.domElement);scene.add(gizmo.getHelper());gizmo.setSize(.85);installTransformPrecision(gizmo,r.domElement,panel,()=>Math.min(...[...selectedNodes].map(node=>node.position.y)));
@@ -241,7 +249,7 @@ const outline=new T.Box3Helper(new T.Box3(),0x78dfc6);scene.add(outline);outline
 function openDocument(raw,name){const nextDocument=new SaveDocument(raw,name),nextEntries=parse(nextDocument.data);run++;modelQueue.cancelPending();materialQueue.cancelPending();prepared.clear();placement.cancel();duplicateNodes.clear();viewMenu.reset(true);saveDocument=nextDocument;viewMenu.loadVisibility(name+':'+saveDocument.rows.map(row=>row.instanceID??row.InstanceID).join(','));entries=nextEntries;selectedIndex=-1;selectedNodes.clear();selectionHighlighter.clear();clearSelectionOutlines();gizmo.detach();outline.visible=false;}
 function clearSelectionOutlines(){for(const child of selectionOutlines.children){child.geometry.dispose();child.material.dispose();}selectionOutlines.clear();}
 function selectEditorNode(node,add=false,navigate=false){if(placement.active)placement.cancel();if(gizmo.dragging||performance.now()<suppressPickUntil)return;applySelection(node?[node]:[],add);if(navigate&&node)revealSceneSelection();}
-function applySelection(nodes,add=false,crossing=false){const started=performance.now();if(!add)selectedNodes.clear();for(const node of nodes)selectedNodes.add(node);selectedNode=[...selectedNodes].at(-1)??null;selectedIndex=selectedNode?group.children.indexOf(selectedNode):-1;$('rotated').value=selectedIndex<0?'':String(selectedIndex);attachTransformHandle();renderProperties();updateListSelection();updateOutline();panel.dataset.selectionCpuMs=(performance.now()-started).toFixed(2);panel.dataset.selectionCount=String(selectedNodes.size);status.textContent=selectedNodes.size?`已选择 ${selectedNodes.size} 件物品${nodes.length>1?' · '+(crossing?'相交框选':'包含框选'):''} · 可移动、旋转、复制、删除或聚焦`:'未选择物品';}
+function applySelection(nodes,add=false,crossing=false){const started=performance.now();if(!add)selectedNodes.clear();for(const node of nodes)selectedNodes.add(node);selectedNode=[...selectedNodes].at(-1)??null;selectedIndex=selectedNode?group.children.indexOf(selectedNode):-1;if($('isolate').checked)restoreVisibility();attachTransformHandle();renderProperties();updateListSelection();updateOutline();panel.dataset.selectionCpuMs=(performance.now()-started).toFixed(2);panel.dataset.selectionCount=String(selectedNodes.size);status.textContent=selectedNodes.size?`已选择 ${selectedNodes.size} 件物品${nodes.length>1?' · '+(crossing?'相交框选':'包含框选'):''} · 可移动、旋转、复制、删除或聚焦`:'未选择物品';}
 function updateOutline(){outline.visible=false;clearSelectionOutlines();selectionHighlighter.apply(selectedNodes,batches);panel.dataset.selectionHighlight='model';}
 installWorkspaceSelection({canvas:r.domElement,panel,camera,controls,gizmo,nodes:()=>group.children,onSelect:(nodes,add,crossing)=>{applySelection(nodes,add,crossing);if(nodes.length)revealSceneSelection();},onClick:(e,add)=>{if(performance.now()<suppressPickUntil)return;const b=r.domElement.getBoundingClientRect();mouse.set((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1);ray.setFromCamera(mouse,camera);const hit=ray.intersectObjects([...group.children,...batches.pool.children],true).find(h=>batches.owner(h,group));if(!hit)setMode('select');selectEditorNode(hit?batches.owner(hit,group):null,add,true);}});
 initWorkspacePanels();
@@ -274,6 +282,7 @@ const placement=installWorkspacePlacement({scene,camera,canvas:r.domElement,pane
   gizmo.setMode(grabRotation?.mode??editorMode);grabRotation=null;
 },onFinish:cancelled=>{if(cancelled){attachTransformHandle();updateOutline();}}});
 async function loadPlacementItem(id){
+  const quality=materialQuality();
   const asset=mapping[id];if(!asset?.path)throw Error('此物品尚无模型');
   const node=new T.Group(),mesh=new T.Group();node.add(mesh);
   for(const component of asset.components??[{path:asset.path}]){
@@ -282,13 +291,13 @@ async function loadPlacementItem(id){
     if(component.quaternion)local.quaternion.fromArray(unrealQuaternionToScene(component.quaternion));
     if(component.scale){const [x,y,z]=component.scale;local.scale.set(x,z,y);}
     if(component.matrix){local.matrix.fromArray(componentMatrixToScene(component.matrix));local.matrixAutoUpdate=false;}
-    assignMaterials(part,await prepareMaterial(component.path,asset));mesh.add(local);
+    assignMaterials(part,await prepareMaterial(component.path,asset,quality));mesh.add(local);
   }
-  applyModelBasis(mesh,asset);node.userData={id:Number(id),unmatched:false,materialCounts:{textured:1,fallback:0}};
+  applyModelBasis(mesh,asset);node.userData={id:Number(id),unmatched:false,textureQuality:quality,materialCounts:{textured:1,fallback:0}};
   renderQuality.prepare(node);return node;
 }
 function placementPositions(nodes,offset){return nodes.map(node=>({x:(node.position.x+offset.x)*100,y:(node.position.z+offset.z)*100,z:(node.position.y+offset.y)*100}));}
-function renderProperties(){dyePanel.render([...selectedNodes]);const a=selectedNode?.userData;$('properties').hidden=!a;$('emptySelection').hidden=!!a;for(const id of ['grab','arrayDuplicate','curveDuplicate','duplicate','delete','focusSelection'])$(id).disabled=!a||readyRun!==run;if(!a)return;if(selectedNodes.size>1){$('selectedName').textContent=`${selectedNodes.size} 件物品`;$('selectedMeta').textContent='多选模式 · 共用中心移动、旋转 · 局部轴参考最后选中物品';for(const kind of ['position','rotation','scale'])$(kind+'Fields').replaceChildren();$('applyProperties').disabled=true;buildLegality.decorate([...selectedNodes].map(n=>n.userData.id));return;}$('applyProperties').disabled=false;$('selectedName').textContent=furniture[a.id]?.name??'物品';$('selectedMeta').textContent=`物品 ID ${a.id} · 实例 ${a.instance} · ${a.unmatched?'模型未匹配':'真实模型'}`;
+function renderProperties(){$('nearTop').disabled=!selectedNode||readyRun!==run;$('isolate').disabled=!selectedNode;dyePanel.render([...selectedNodes]);const a=selectedNode?.userData;$('properties').hidden=!a;$('emptySelection').hidden=!!a;for(const id of ['grab','arrayDuplicate','curveDuplicate','duplicate','delete','focusSelection'])$(id).disabled=!a||readyRun!==run;if(!a)return;if(selectedNodes.size>1){$('selectedName').textContent=`${selectedNodes.size} 件物品`;$('selectedMeta').textContent='多选模式 · 共用中心移动、旋转 · 局部轴参考最后选中物品';for(const kind of ['position','rotation','scale'])$(kind+'Fields').replaceChildren();$('applyProperties').disabled=true;buildLegality.decorate([...selectedNodes].map(n=>n.userData.id));return;}$('applyProperties').disabled=false;$('selectedName').textContent=furniture[a.id]?.name??'物品';$('selectedMeta').textContent=`物品 ID ${a.id} · 实例 ${a.instance} · ${a.unmatched?'模型未匹配':'真实模型'}`;
   const colors=dyeColorsForRow(a.raw);
   if(decodeDyeColors(colors).size)$('selectedMeta').textContent+=` · 存档配色 ${JSON.stringify(colors)} · ${a.dyeIssues?.length?'染色待补：'+a.dyeIssues.join('；'):'染色已匹配'}`;
   for(const kind of ['position','rotation','scale']){const host=$(kind+'Fields');host.replaceChildren();const axes=kind==='rotation'?[['z','Roll'],['x','Pitch'],['y','Yaw']]:[['x','X'],['y','Y'],['z','Z']];for(const [axis,label] of axes){const wrap=document.createElement('label');wrap.textContent=label;const input=document.createElement('input');input.type='number';input.step=kind==='scale'?'0.01':'1';input.value=Number(a[kind][axis].toFixed(4));input.dataset.field=kind+'.'+axis;input.onchange=()=>{const value=Number(input.value);if(!Number.isFinite(value)||(kind==='scale'&&value<=0)){renderProperties();return;}const transform=structuredClone({position:a.position,rotation:a.rotation,scale:a.scale});transform[kind][axis]=value;saveDocument.transform(selectedIndex,buildLegality.constrain(a.id,transform,kind));syncDocumentTransforms();};wrap.append(input);host.append(wrap);}}
@@ -326,21 +335,22 @@ async function changeSelectedDye(area,index,nodes){
   await syncDocumentDyes();
 }
 async function syncDocumentDyes(){
-  const token=++dyeUpdate,loadRun=run;
+  const token=++dyeUpdate,loadRun=run,quality=materialQuality();
   const nodes=(saveDocument.changedIndices??[]).map(i=>group.children[i]).filter(Boolean);
   for(const node of nodes){const i=group.children.indexOf(node),a=parse([saveDocument.rows[i]])[0];entries[i]=a;node.userData={...node.userData,...a};}
   renderWorkspace(false);status.textContent=`正在更新 ${nodes.length} 件物品的配色…`;
   try{
     const resolved=await Promise.all(nodes.map(async node=>{
       const asset=mapping[node.userData.id];if(!asset?.path)return {node,results:[]};
-      const results=await Promise.all((asset.components??[{path:asset.path}]).map((c,i)=>prepareMaterial(c.path,asset,node.userData.highDetail?'original':'preview',node.userData.id,dyeColorsForRow(node.userData.raw),i)));
+      const results=await Promise.all((asset.components??[{path:asset.path}]).map((c,i)=>prepareMaterial(c.path,asset,quality,node.userData.id,dyeColorsForRow(node.userData.raw),i)));
       return {node,results};
     }));
     if(token!==dyeUpdate||loadRun!==run)return;
+    if(quality!==materialQuality()){await updateSceneTextureQuality();return;}
     // Keep the old appearance until replacements are ready; never rebuild GLBs.
     selectionHighlighter.clear();batches.clear();viewMenu.restoreMaterials();
     for(const {node,results} of resolved){
-      if(!results.length)continue;
+      if(!results.length)continue;node.userData.textureQuality=quality;
       node.children[0].children.forEach((local,i)=>assignMaterials(local.children[0],results[i]));
       node.userData.dyeIssues=[...new Set(results.flatMap(x=>x.counts.dyeIssues??[]))];
       node.userData.dyedSlots=results.reduce((sum,x)=>sum+(x.counts.dyedSlots??0),0);
@@ -358,7 +368,7 @@ async function addFurniture(id){if(!saveDocument||readyRun!==run)return;gizmo.de
   const started=performance.now(),node=nodes[0],index=saveDocument.add(id,placementPositions(nodes,offset)[0],readNodeTransform(node).rotation),a=parse([saveDocument.rows[index]])[0];
   setNodeEntry(node,a);entries.push(a);group.add(node);duplicateNodes.set(String(a.instance),node);renderQuality.prepare(node);finishDuplicateUpdate([node],started);status.textContent='已放置 '+(furniture[id]?.name??'物品');
 });}
-function focusEditor(){if(selectedNodes.size>1){const b=new T.Box3();for(const n of selectedNodes)b.union(new T.Box3().setFromObject(n));const c=b.getCenter(new T.Vector3()),d=Math.max(1,b.getSize(new T.Vector3()).length()*1.3);controls.target.copy(c);camera.position.copy(c).add(new T.Vector3(.8,.6,1).normalize().multiplyScalar(d));controls.update();return;}if(!selectedNode)return;$('rotated').value=String(selectedIndex);inspectRotation();}
+function focusEditor(){if(selectedNodes.size>1){const b=new T.Box3();for(const n of selectedNodes)b.union(new T.Box3().setFromObject(n));const c=b.getCenter(new T.Vector3()),d=Math.max(1,b.getSize(new T.Vector3()).length()*1.3);controls.target.copy(c);camera.position.copy(c).add(new T.Vector3(.8,.6,1).normalize().multiplyScalar(d));controls.update();return;}if(!selectedNode)return;const b=new T.Box3().setFromObject(selectedNode),c=b.getCenter(new T.Vector3()),d=Math.max(1,b.getSize(new T.Vector3()).length()*1.6);controls.target.copy(c);camera.position.copy(c).add(new T.Vector3(.8,.6,1).normalize().multiplyScalar(d));camera.far=Math.max(5000,d*12);camera.updateProjectionMatrix();controls.update();}
 function setMode(mode){if(placement.active)placement.cancel();editorMode=mode;document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));if(mode==='select')gizmo.detach();else{gizmo.setMode(mode);attachTransformHandle();}r.domElement.focus();}
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
 gizmo.setSpace($('space').value);
@@ -401,9 +411,9 @@ const gameFiles=installGameFiles({getDocument:()=>saveDocument,isReady:()=>ready
 function setNodeEntry(node,a){node.userData={...node.userData,...a};node.position.set(a.position.x/100,a.position.z/100,a.position.y/100);node.quaternion.fromArray(saveRotationToScene(a.rotation));node.scale.set(a.scale.x,a.scale.z,a.scale.y);}
 function finishDuplicateUpdate(nodes,started){
   grassGround.invalidate(group);
-  syncRotatedList();
   viewMenu.prepareMaterials();viewMenu.applyVisibility();
   applySelection(nodes);renderWorkspace(false);queueStructureListRefresh();
+  if(nodes.some(n=>n.userData.textureQuality!==materialQuality()))updateSceneTextureQuality();
   summary.textContent=`物品 ${entries.length} 件 · 局部更新，复用已有模型和贴图`;
   panel.dataset.structureUpdate='incremental';panel.dataset.structureCpuMs=(performance.now()-started).toFixed(2);panel.dataset.sceneGeneration=String(run);
 }
