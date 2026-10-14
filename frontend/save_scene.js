@@ -15,6 +15,7 @@ import {installWorkspacePlacement,localDragArrayLayout} from './workspace_placem
 import {installBuildLegality} from './build_legality.js';
 import {installSaveValidation} from './workspace_validation.js';
 import {cloneLoadedFurniture} from './scene_duplicate.js';
+import {notify} from './notices.js';
 import {TransformFrame,MultiTransformFrame} from './transform_frame.js';
 import {installTransformPrecision} from './transform_precision.js';
 import {installWorkspaceContextMenu} from './workspace_context_menu.js';
@@ -208,11 +209,8 @@ async function initial(){try{
   const report=loaded[2].report??{},catalogStatus=document.getElementById('catalogStatus');
   catalogStatus.textContent=report.error??`当前游戏目录 · 名称 ${report.named??0} 款 · 已分类 ${report.classified??0} 款${report.missingItems?.length?` · ${report.missingItems.length} 款缺少目录记录，保留 ID 显示`:''}`;
   if(report.error)catalogStatus.style.color='#edb68c';
-  if(recovery){mapping=await fetch('/api/recovery-mapping').then(r=>r.json());document.querySelector('#runtimeNotice').textContent='旧缓存恢复视图：只显示已有模型，不代表当前游戏版本。';}
+  if(recovery){mapping=await fetch('/api/recovery-mapping').then(r=>r.json());notify('旧缓存恢复视图：只显示已有模型，不代表当前游戏版本。',{key:'recovery',level:'warn'});}
   openDocument({PlaceInfo:[]},'新家园存档.json');await rebuild();renderWorkspace();
-  const saves=await fetch('/api/saves').then(r=>r.json());
-  for(const name of saves.files)document.querySelector('#localGameSave').add(new Option(name,name));
-  document.querySelector('#loadLocalGameSave').onclick=async()=>{const name=document.querySelector('#localGameSave').value;if(!name)return;try{const response=await fetch('/api/save/'+encodeURIComponent(name));if(!response.ok)throw Error('存档读取失败');openDocument(await response.json(),name);await rebuild();renderWorkspace();}catch(e){status.textContent=e.message;}};
 }catch(e){status.textContent='初始化失败：'+e.message}};
 
 import {categoryLabel,matchesCategory,populateCategories} from './furniture_categories.js';
@@ -420,7 +418,7 @@ $('importSave').onclick=()=>$('save').click();
 $('applyProperties').onclick=()=>{if(!selectedNode||readyRun!==run)return;const value=structuredClone({position:selectedNode.userData.position,rotation:selectedNode.userData.rotation,scale:selectedNode.userData.scale});for(const input of $('properties').querySelectorAll('[data-field]')){const [kind,axis]=input.dataset.field.split('.'),number=Number(input.value);if(!Number.isFinite(number)||(kind==='scale'&&number<=0)){status.textContent='请填写有效数字，缩放倍率需要大于 0。';return;}value[kind][axis]=number;}saveDocument.transform(selectedIndex,buildLegality.constrain(selectedNode.userData.id,value,'properties'));syncDocumentTransforms();};
 function downloadValidatedSave(data,corrected=false){const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=saveDocument.name.replace(/\.json$/i,'')+(corrected?'_validated':'_edited')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status.textContent=corrected?'已按 Momo 规则修正导出；工作区保持原样。':'已导出当前数据；工作区保持原样。';}
 const saveValidation=installSaveValidation({getDocument:()=>saveDocument,selectIndices:indices=>{restoreVisibility();applySelection(indices.map(i=>group.children[i]).filter(Boolean));focusEditor();},exportData:downloadValidatedSave});
-const gameFiles=installGameFiles({getDocument:()=>saveDocument,isReady:()=>readyRun===run&&!!saveDocument,loadDocument:async(raw,name)=>{openDocument(raw,name);await rebuild();renderWorkspace();},validate:(callback,title)=>saveValidation.open({callback,title}),notify:message=>{status.textContent=message;},onSaved:(doc,revision,corrected,name)=>{if(doc===saveDocument&&doc.revision===revision&&!corrected){doc.savedRevision=revision;doc.name=name;renderWorkspace(false);}}});
+const gameFiles=installGameFiles({getDocument:()=>saveDocument,isReady:()=>readyRun===run&&!!saveDocument,loadDocument:async(raw,name)=>{openDocument(raw,name);await rebuild();renderWorkspace();},validate:(callback,title)=>saveValidation.open({callback,title}),notify:message=>notify(message),onSaved:(doc,revision,corrected,name)=>{if(doc===saveDocument&&doc.revision===revision&&!corrected){doc.savedRevision=revision;doc.name=name;renderWorkspace(false);}}});
 function setNodeEntry(node,a){node.userData={...node.userData,...a};node.position.set(a.position.x/100,a.position.z/100,a.position.y/100);node.quaternion.fromArray(saveRotationToScene(a.rotation));node.scale.set(a.scale.x,a.scale.z,a.scale.y);}
 function finishDuplicateUpdate(nodes,started){
   grassGround.invalidate(group);
