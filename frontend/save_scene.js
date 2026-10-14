@@ -263,7 +263,7 @@ function placementSurface(ray){return ray.intersectObjects([...group.children,..
   const owner=batches.owner(h,group);if(!owner?.visible||!h.face)return false;
   const matrix=h.object.matrixWorld.clone();if(h.object.isInstancedMesh){const instance=new T.Matrix4();h.object.getMatrixAt(h.instanceId,instance);matrix.multiply(instance);}
   const normal=h.face.normal.clone().applyNormalMatrix(new T.Matrix3().getNormalMatrix(matrix));
-  h.placementNormal=normal;h.placementId=owner.userData.id;h.placementBounds=new T.Box3().setFromObject(owner);return true;
+   h.placementNormal=normal;h.placementId=owner.userData.id;h.placementBounds=new T.Box3().setFromObject(owner);h.placementQuaternion=owner.getWorldQuaternion(new T.Quaternion()).multiply(owner.children[0]?.quaternion??new T.Quaternion());return true;
 });}
 let grabRotation=null;
 const grabSingleFrame=new TransformFrame(),grabMultiFrame=new MultiTransformFrame();

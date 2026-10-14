@@ -71,15 +71,30 @@ export function localDragArrayLayout(points,quaternion,delta,axes='X'){
 }
 
 // Preview is outside the document and batching. Only confirmation creates records.
+function horizontalHeading(quaternion){
+  const forward=new T.Vector3(0,0,1).applyQuaternion(quaternion);
+  if(forward.x*forward.x+forward.z*forward.z>1e-10)return Math.atan2(forward.x,forward.z);
+  const right=new T.Vector3(1,0,0).applyQuaternion(quaternion);
+  return Math.atan2(right.x,right.z)-Math.PI/2;
+}
+export function alignedPlacementQuaternion(node,targetQuaternion){
+  const basis=node.children[0]?.quaternion??new T.Quaternion();
+  return new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0),horizontalHeading(targetQuaternion)-horizontalHeading(basis));
+}
+
 export function installWorkspacePlacement({scene,camera,canvas,panel,status,pickSurface,onFinish,onRotationStart=()=>{},onRotationEnd=()=>{}}){
   const root=new T.Group();scene.add(root);
   const ray=new T.Raycaster(),pointer=new T.Vector2(),point=new T.Vector3(),plane=new T.Plane(new T.Vector3(0,1,0),0);
-  const hint=document.createElement('div');hint.hidden=true;hint.style.cssText='position:absolute;bottom:48px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:12px;background:#173c36ee;color:#b8ffe4;pointer-events:none;z-index:20;white-space:nowrap';panel.append(hint);
+  const hint=document.createElement('div');hint.hidden=true;hint.style.cssText='position:absolute;bottom:48px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:12px;background:#173c36ee;color:#b8ffe4;pointer-events:none;z-index:20;max-width:calc(100% - 32px);width:max-content;text-align:center;font-size:12px;line-height:1.6';panel.append(hint);
   const rotationUi=document.createElement('div');rotationUi.className='placement-rotation-ui';rotationUi.hidden=true;
   const rotationLabel=document.createElement('span'),accept=document.createElement('button'),reject=document.createElement('button');
   accept.textContent='确认旋转 · R';reject.textContent='取消旋转';rotationUi.append(rotationLabel,accept,reject);panel.append(rotationUi);
   accept.onclick=()=>endRotation(false);reject.onclick=()=>endRotation(true);
   let rotation=null;
+  function restoreAlignment(){
+    if(!session?.alignment)return;
+    session.alignment.node.quaternion.copy(session.alignment.quaternion);session.alignment=null;refreshBounds();
+  }
   function refreshBounds(){
     root.updateMatrixWorld(true);session.supportPoints=placementSupportPoints(session.nodes).map(p=>p.sub(root.position));
     session.bounds=new T.Box3().setFromPoints(session.supportPoints);
@@ -89,12 +104,13 @@ export function installWorkspacePlacement({scene,camera,canvas,panel,status,pick
     if(cancelled)rotation.transforms.forEach(({node,position,quaternion})=>{node.position.copy(position);node.quaternion.copy(quaternion);});
     onRotationEnd();rotation=null;pressed=false;rotationUi.hidden=true;refreshBounds();
     canvas.style.cursor='crosshair';panel.dataset.placement='preview';
-    hint.textContent='抓取中 · 默认智能吸附 · Shift 暂停吸附 · R 旋转 · 左键放置 · 右键取消';status.textContent=hint.textContent;position();
+    hint.textContent='抓取中 · Alt 对齐中心与水平朝向（单件） · Shift 暂停吸附 · R 旋转 · 左键放置 · 右键取消';status.textContent=hint.textContent;position();
   }
   function toggleRotation(){
     if(!session||session.array)return;
     if(rotation){endRotation(false);return;}
     if(!session.valid){status.textContent='先将鼠标移入场景，再按 R 旋转';return;}
+    session.alignment=null; // Manual rotation starts from the currently visible orientation.
     rotation={transforms:session.nodes.map(node=>({node,position:node.position.clone(),quaternion:node.quaternion.clone()}))};
     panel.dataset.placement='rotate';rotationUi.hidden=false;rotationLabel.textContent='三轴旋转';canvas.style.cursor='';
     onRotationStart(session.nodes);
@@ -140,10 +156,19 @@ export function installWorkspacePlacement({scene,camera,canvas,panel,status,pick
     }
     const rect=canvas.getBoundingClientRect();pointer.set((lastPointer.x-rect.left)/rect.width*2-1,-(lastPointer.y-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);
     const hit=lastPointer.shift?null:pickSurface(ray);
+    const align=Boolean(lastPointer.alt&&hit?.placementQuaternion&&session.nodes.length===1);
+    if(align){
+      const node=session.nodes[0];
+      session.alignment??={node,quaternion:node.quaternion.clone()};
+      const quaternion=alignedPlacementQuaternion(node,hit.placementQuaternion);
+      if(1-Math.abs(node.quaternion.dot(quaternion))>1e-10){node.quaternion.copy(quaternion);refreshBounds();}
+    }else restoreAlignment();
+    panel.dataset.placementAligned=String(align);
+    panel.dataset.placementRotation=JSON.stringify(session.nodes[0]?.quaternion.toArray());
     const target=hit?.point??ray.ray.intersectPlane(plane,point);
     session.valid=Boolean(target);root.visible=session.valid;
     if(target){root.position.copy(target);
-      if(hit?.placementNormal)root.position.copy(surfacePlacementPosition(session.bounds,hit,session.nodes.length===1&&String(session.nodes[0].userData.id)===String(hit.placementId),session.supportPoints));
+      if(hit?.placementNormal)root.position.copy(surfacePlacementPosition(session.bounds,hit,align||(session.nodes.length===1&&String(session.nodes[0].userData.id)===String(hit.placementId)),session.supportPoints));
       panel.dataset.placementPosition=[root.position.x,root.position.y,root.position.z].map(v=>v.toFixed(4)).join(',');
     }
   }
@@ -168,17 +193,23 @@ export function installWorkspacePlacement({scene,camera,canvas,panel,status,pick
         const materials=new Map();for(const [object,material] of originals){const preview=Array.isArray(object.material)?object.material:[object.material],actual=Array.isArray(material)?material:[material];preview.forEach((m,i)=>materials.set(m,actual[i]));}
         nodes.forEach(n=>root.remove(n));session.nodes=[];session.array={...arrayOptions,templates:nodes,groups:[],materials,anchor:anchor.clone(),plane:new T.Plane(new T.Vector3(0,1,0),-anchor.y)};
       }
-      hint.textContent='拿着 '+label+' · 默认智能吸附 · Shift 暂停吸附 · R 旋转 · 左键放置 · 右键取消';hint.hidden=false;canvas.style.cursor='crosshair';panel.dataset.placement='preview';status.textContent=hint.textContent;
+      hint.textContent='拿着 '+label+' · Alt 对齐中心与水平朝向（单件） · Shift 暂停吸附 · R 旋转 · 左键放置 · 右键取消';hint.hidden=false;canvas.style.cursor='crosshair';panel.dataset.placement='preview';status.textContent=hint.textContent;
       if(session.array){hint.textContent='阵列复制 · 拖动鼠标拉出排列 · 保持原高度 · 右键取消';status.textContent=hint.textContent;}position();
     }catch(error){if(token===generation){stop(true);status.textContent='拿起物品失败：'+error.message;}}
   }
-  canvas.addEventListener('pointermove',e=>{lastPointer={x:e.clientX,y:e.clientY,shift:e.shiftKey};if(session)position();},{capture:true});
+  canvas.addEventListener('pointermove',e=>{lastPointer={x:e.clientX,y:e.clientY,shift:e.shiftKey,alt:e.altKey};if(session)position();},{capture:true});
   canvas.addEventListener('pointerleave',()=>{if(rotation)return;lastPointer=null;if(session&&!session.array?.settings&&!session.array?.handle){session.valid=false;root.visible=false;}});
-  window.addEventListener('keyup',e=>{if(e.key==='Shift'&&lastPointer){lastPointer.shift=false;position();}});
-  canvas.addEventListener('pointerdown',e=>{if(!session||session.array?.handle||rotation||e.button!==0)return;e.preventDefault();e.stopImmediatePropagation();canvas.focus({preventScroll:true});pressed=true;position();},{capture:true});
+  window.addEventListener('keyup',e=>{if((e.key==='Shift'||e.key==='Alt')&&lastPointer){lastPointer.shift=e.shiftKey;lastPointer.alt=e.altKey;position();}});
+  window.addEventListener('blur',()=>{if(lastPointer){lastPointer.shift=lastPointer.alt=false;position();}});
+  canvas.addEventListener('pointerdown',e=>{if(!session||session.array?.handle||rotation||e.button!==0)return;e.preventDefault();e.stopImmediatePropagation();canvas.focus({preventScroll:true});lastPointer={x:e.clientX,y:e.clientY,shift:e.shiftKey,alt:e.altKey};pressed=true;position();},{capture:true});
   canvas.addEventListener('pointerup',e=>{if(rotation||!pressed||e.button!==0)return;pressed=false;e.preventDefault();e.stopImmediatePropagation();if(session?.valid)stop(false);},{capture:true});
   canvas.addEventListener('click',e=>{if(pressed||session){e.preventDefault();e.stopImmediatePropagation();}},{capture:true});
-  window.addEventListener('keydown',e=>{if(document.querySelector('dialog[open]')||e.target.closest?.('input,textarea,select,[contenteditable="true"]'))return;if(e.key==='Shift'&&lastPointer){lastPointer.shift=true;position();}if(session&&!session.array&&e.key.toLowerCase()==='r'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat)toggleRotation();}},{capture:true});
+  window.addEventListener('keydown',e=>{
+    if(document.querySelector('dialog[open]')||e.target.closest?.('input,textarea,select,[contenteditable="true"]'))return;
+    if(e.key==='Alt'&&session&&!rotation&&!session.array)e.preventDefault();
+    if((e.key==='Shift'||e.key==='Alt')&&lastPointer){lastPointer.shift=e.shiftKey;lastPointer.alt=e.altKey;position();}
+    if(session&&!session.array&&e.key.toLowerCase()==='r'&&!e.ctrlKey&&!e.metaKey&&!e.altKey){e.preventDefault();e.stopImmediatePropagation();if(!e.repeat)toggleRotation();}
+  },{capture:true});
   window.addEventListener('pointerdown',e=>{suppressContext=false;if(e.button!==2||!(session||panel.dataset.placement==='loading'))return;
     e.preventDefault();e.stopImmediatePropagation();suppressContext=true;if(rotation){endRotation(true);return;}const text=session?.array?.cancelText??'已取消抓取，位置与存档保持原样';stop(true);status.textContent=text;
   },{capture:true});
