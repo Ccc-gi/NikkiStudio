@@ -3,7 +3,7 @@ import {preserveMaterialShader} from './foliage_material.js';
 
 // Per-instance colour keeps shared furniture materials and geometry untouched.
 export class SelectionHighlight {
-  constructor(){this.changed=[];this.tint=new T.Color(0x65ffce);this.white=new T.Color(0xffffff);this.materialCache=new WeakMap();this.batchIndex=new Map();this.previous=new Set();this.topology=null;this.metrics={materialClones:0,colourWrites:0};}
+  constructor(getLevel=()=> 'standard'){this.getLevel=getLevel;this.changed=[];this.tint=new T.Color(0x65ffce);this.white=new T.Color(0xffffff);this.materialCache=new WeakMap();this.batchIndex=new Map();this.previous=new Set();this.topology=null;this.metrics={materialClones:0,colourWrites:0};}
   clear(){for(const {mesh,original} of this.changed)mesh.material=original;this.changed=[];}
   apply(selected,batches){
     this.clear();
@@ -22,7 +22,8 @@ export class SelectionHighlight {
       // Instanced source meshes are invisible and highlighted in their batch.
       if(!mesh.isMesh||!mesh.visible)return;
       const original=mesh.material,materials=Array.isArray(original)?original:[original];
-      const clones=materials.map(material=>{if(this.materialCache.has(material))return this.materialCache.get(material);const clone=preserveMaterialShader(material,material.clone());if(clone.color)clone.color.multiply(this.tint);if(clone.emissive){clone.emissive.lerp(this.tint,.3);clone.emissiveIntensity=Math.max(.35,clone.emissiveIntensity??1);}this.materialCache.set(material,clone);this.metrics.materialClones++;return clone;});
+      const mode=this.getLevel()==='fine'?'natural':'legacy';
+      const clones=materials.map(material=>{let cache=this.materialCache.get(material);if(!cache){cache=new Map();this.materialCache.set(material,cache);}if(cache.has(mode))return cache.get(mode);const clone=preserveMaterialShader(material,material.clone());if(clone.color)clone.color.multiply(this.tint);if(mode==='legacy'&&clone.emissive){clone.emissive.lerp(this.tint,.3);clone.emissiveIntensity=Math.max(.35,clone.emissiveIntensity??1);}cache.set(mode,clone);this.metrics.materialClones++;return clone;});
       mesh.material=Array.isArray(original)?clones:clones[0];this.changed.push({mesh,original,clones});
     });}
   }

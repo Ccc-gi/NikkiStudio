@@ -210,9 +210,10 @@ import {SaveDocument} from './save_document.js';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
 
 let saveDocument=null,selectedIndex=-1,libraryMode=false,editorMode='select',dragStart=null,suppressPickUntil=0;
-const selectionHighlighter=new SelectionHighlight();
+const selectionHighlighter=new SelectionHighlight(()=>renderQuality.level);
 const sceneRows=new Map();
 const selectedNodes=new Set(),selectionOutlines=new T.Group();scene.add(selectionOutlines);
+renderQuality.onLevelChange(()=>selectionHighlighter.apply(selectedNodes,batches));
 const $=id=>document.getElementById(id);
 const dyePanel=installDyePanel({host:$('dyePanel'),configFor:furnitureDyeConfig,onChange:changeSelectedDye});
 const gizmo=new TransformControls(camera,r.domElement);scene.add(gizmo.getHelper());gizmo.setSize(.85);installTransformPrecision(gizmo,r.domElement,panel,()=>Math.min(...[...selectedNodes].map(node=>node.position.y)));

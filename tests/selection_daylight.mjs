@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import * as T from 'three';
+import {SelectionHighlight} from '../frontend/selection_highlight.js';
+let level='standard';const highlight=new SelectionHighlight(()=>level);
+const original=new T.MeshStandardMaterial({color:0xffffff,emissive:0x101010,emissiveIntensity:.4});
+const owner=new T.Group(),mesh=new T.Mesh(new T.BoxGeometry(),original);owner.add(mesh);
+const selected=new Set([owner]),batches={batches:[]};
+highlight.apply(selected,batches);const legacy=mesh.material;
+assert.notEqual(legacy.emissive.getHex(),original.emissive.getHex());
+level='fine';highlight.apply(selected,batches);const natural=mesh.material;
+assert.equal(natural.emissive.getHex(),original.emissive.getHex());assert.equal(natural.emissiveIntensity,original.emissiveIntensity);
+assert.notEqual(natural.color.getHex(),original.color.getHex());
+level='standard';highlight.apply(selected,batches);assert.equal(mesh.material,legacy);
+highlight.clear();assert.equal(mesh.material,original);
+assert.equal(original.emissive.getHex(),0x101010);assert.equal(original.color.getHex(),0xffffff);
+console.log('PASS: selected fine models keep real emissive values; legacy highlight and original material restore unchanged');

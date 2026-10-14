@@ -1,6 +1,7 @@
 import * as T from 'three';
 import {createStorybookSky} from './storybook_environment.js';
 import {pcss} from './drei_pcss.js';
+import {applyLightingProfile} from './lighting_profiles.js';
 
 export const RENDER_LEVELS = {
   light: {label:'轻量', pixels:1, shadow:0, radius:60},
@@ -11,6 +12,7 @@ export const RENDER_LEVELS = {
 // Presentation only. Furniture transforms and document data never enter this module.
 export function installRenderQuality({renderer,scene,camera,controls,sun,hemisphere,select,note}){
   const direction=new T.Vector3(-.5,.7,.45).normalize();
+  const legacyDirection=direction.clone();let level='standard',levelListener=()=>{};
   const skyBackground=createStorybookSky();
   const pmrem=new T.PMREMGenerator(renderer);
   // Three.js environment-map pattern: the reflected world matches the visible sky.
@@ -39,18 +41,43 @@ export function installRenderQuality({renderer,scene,camera,controls,sun,hemisph
   brightness.type='range';brightness.min='.75';brightness.max='1.5';brightness.step='.05';brightness.value='1';
   brightness.setAttribute('aria-label','环境亮度');brightnessRow.append('环境亮度 ',brightness,brightnessValue);
   note.after(brightnessRow);
-  const setBrightness=()=>{const value=Number(brightness.value);renderer.toneMappingExposure=1.1*value;
+  const lighting={scene,sun,hemisphere,fill,renderer};
+  const setBrightness=()=>{const value=Number(brightness.value);applyLightingProfile(level,lighting,value);
     brightnessValue.textContent=Math.round(value*100)+'%';
     try{localStorage.setItem('nikki.environmentBrightness',brightness.value);}catch{}
   };
   brightness.oninput=setBrightness;
   try{const saved=Number(localStorage.getItem('nikki.environmentBrightness'));if(saved>=.75&&saved<=1.5)brightness.value=String(saved);}catch{}
   setBrightness();
-  let level='standard',lastCenter=new T.Vector3(Infinity,Infinity,Infinity),lastRadius=0,restoreShadows;
+  const sunControls=document.createElement('div');sunControls.className='natural-sun-controls';
+  const azimuth=document.createElement('input'),elevation=document.createElement('input');
+  azimuth.type=elevation.type='range';azimuth.min='0';azimuth.max='360';azimuth.step='5';azimuth.value='75';
+  elevation.min='20';elevation.max='75';elevation.step='5';elevation.value='35';
+  azimuth.setAttribute('aria-label','太阳方位');elevation.setAttribute('aria-label','太阳高度');
+  const azimuthRow=document.createElement('label'),elevationRow=document.createElement('label');
+  const azimuthValue=document.createElement('output'),elevationValue=document.createElement('output');
+  azimuthRow.className=elevationRow.className='environment-brightness';
+  azimuthRow.append('太阳方位 ',azimuth,azimuthValue);elevationRow.append('太阳高度 ',elevation,elevationValue);
+  sunControls.append(azimuthRow,elevationRow);brightnessRow.after(sunControls);
+  let lastCenter=new T.Vector3(Infinity,Infinity,Infinity),lastRadius=0,restoreShadows;
+  function updateDirection(){
+    if(level==='fine'){
+      const a=T.MathUtils.degToRad(Number(azimuth.value)),e=T.MathUtils.degToRad(Number(elevation.value));
+      direction.set(Math.sin(a)*Math.cos(e),Math.sin(e),Math.cos(a)*Math.cos(e));
+    }else direction.copy(legacyDirection);
+    azimuthValue.textContent=azimuth.value+'°';elevationValue.textContent=elevation.value+'°';
+    lastCenter.set(Infinity,Infinity,Infinity);renderer.shadowMap.needsUpdate=true;
+    if(level==='fine')try{localStorage.setItem('nikki.sunAzimuth',azimuth.value);localStorage.setItem('nikki.sunElevation',elevation.value);}catch{}
+  }
+  for(const [input,key] of [[azimuth,'nikki.sunAzimuth'],[elevation,'nikki.sunElevation']]){
+    try{const saved=localStorage.getItem(key),v=Number(saved);if(saved!==null&&v>=Number(input.min)&&v<=Number(input.max))input.value=String(v);}catch{}
+    input.oninput=updateDirection;
+  }
   function apply(value){
     level=Object.hasOwn(RENDER_LEVELS,value)?value:'standard';const settings=RENDER_LEVELS[level];
     restoreShadows?.();restoreShadows=undefined;
-    if(level==='fine')restoreShadows=pcss({size:16,samples:8});
+    if(level==='fine')restoreShadows=pcss({size:10,samples:8});
+    sunControls.hidden=level!=='fine';updateDirection();setBrightness();
     // r183 uses comparison depth samplers for PCF. PCSS blocker search needs
     // the raw depth texture supplied by BasicShadowMap, filtered by our helper.
     renderer.shadowMap.type=level==='fine'?T.BasicShadowMap:T.PCFShadowMap;
@@ -65,10 +92,13 @@ export function installRenderQuality({renderer,scene,camera,controls,sun,hemisph
     scene.traverse(o=>{if(o.isMesh)for(const m of Array.isArray(o.material)?o.material:[o.material])m.needsUpdate=true;});
     renderer.shadowMap.needsUpdate=true;
     note.textContent=settings.shadow?'温馨庭院 · 云朵天空与远山 · '+sun.shadow.mapSize.x+' 柔和阴影':'温馨庭院 · 云朵天空与远山 · 关闭投影，适合大型场景编辑';
+    if(level==='fine')note.textContent='自然庭院 · 定向日光与天空反射 · '+sun.shadow.mapSize.x+' 柔和阴影';
     note.textContent+=level==='light'?' · 关闭立体草':level==='fine'?' · 庭院野草与零星小花（可视范围 / 距离分级）':' · 原有地面';
     if(level==='fine')note.textContent+=' · PCSS 接触软阴影';
     note.dataset.level=level;
+    note.dataset.sunIntensity=String(sun.intensity);note.dataset.ambientIntensity=String(hemisphere.intensity);
     try{localStorage.setItem('nikki.renderQuality',level);}catch{}
+    levelListener(level);
   }
   select.onchange=()=>apply(select.value);
   let saved;try{saved=localStorage.getItem('nikki.renderQuality');}catch{}
@@ -87,6 +117,7 @@ export function installRenderQuality({renderer,scene,camera,controls,sun,hemisph
       if(radius!==lastRadius){const c=sun.shadow.camera;c.left=c.bottom=-radius;c.right=c.top=radius;c.updateProjectionMatrix();lastRadius=radius;}
       sun.target.updateMatrixWorld();
     },
-    get level(){return level;}
+    get level(){return level;},
+    onLevelChange(callback){levelListener=callback;}
   };
 }
