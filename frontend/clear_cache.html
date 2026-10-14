@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>冷启动测试</title>
+<style>body{background:#17232d;color:#eee;font:18px system-ui;max-width:720px;margin:80px auto;line-height:1.8}a{color:#71d0b7}</style>
+<h1>冷启动测试</h1><p id="status">正在清除浏览器资源缓存……</p>
+<p>后端生成的模型、贴图和材质缓存已清除。游戏目录、AES、usmap 和存档保留。</p>
+<p>请保存旧编辑器中尚未另存为的修改，并关闭旧编辑器标签页，避免继续使用其内存中的模型。</p>
+<p><a id="enter" hidden href="/setup.html">打开资源配置，等待校验后进入编辑器</a></p>
+<script type="module">
+try {
+  for (const name of await caches.keys()) {
+    if (name.startsWith('nikki-furniture-assets-')) await caches.delete(name);
+  }
+  document.querySelector('#status').textContent = '浏览器资源缓存已清除。下一次请求将从游戏重新转换。';
+  document.querySelector('#enter').hidden = false;
+} catch (error) {
+  document.querySelector('#status').textContent = '浏览器缓存清理失败：' + error.message;
+}
+</script></html>

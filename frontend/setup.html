@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nikki Studio · 本地配置</title>
+<link rel="stylesheet" href="/setup.css">
+<main><h1>Nikki Studio</h1><p>连接你安装的游戏。资源在这台电脑上按需转换，不随编辑器下载。</p>
+<form id="setup">
+<label>游戏目录<div class="row"><input id="gameRoot" list="gameCandidates" required placeholder="包含 X6Game 的目录"><datalist id="gameCandidates"></datalist><button type="button" data-browse="game">选择目录</button></div></label>
+<label>AES JSON<textarea id="keys" required rows="5" placeholder='{"mainKey":"…","dynamicKeys":[{"guid":"…","key":"…"}]}' autocomplete="off" spellcheck="false"></textarea></label>
+<p class="hint">从你选择的来源取得匹配输入。<a href="https://gacha.lukefz.xyz/infinitynikki/keys" target="_blank" rel="noreferrer">AES 参考来源</a> · <a href="https://gacha.lukefz.xyz/infinitynikki/mappings" target="_blank" rel="noreferrer">映射参考来源</a>。来源不可用时仍可使用已有本地文件。</p>
+<label>usmap 二进制文件<input id="usmap" type="file" accept=".usmap" required></label>
+<label>资源解析器<div class="row"><input id="parser" required placeholder="cue4parse.exe 的位置"><button type="button" data-browse="parser">选择程序</button></div></label>
+<details><summary>可选：家具名称与尺寸</summary><label>本地 BuildingMomo 家具数据 JSON<div class="row"><input id="metadataFile"><button type="button" data-browse="metadata">选择文件</button></div></label></details>
+<button id="submit" class="primary">校验并连接游戏</button>
+</form>
+<div id="progress" role="status" aria-live="polite">正在检查本地服务…</div>
+<div class="row"><button id="revalidate" hidden>重新校验当前配置</button><a id="enter" hidden href="/save_scene.html?save=new">进入编辑器</a><a id="recover" hidden href="/save_scene.html?save=new&recovery=1">打开旧缓存恢复视图</a></div>
+<p id="directory" class="hint"></p><p class="hint">模型缓存与配置保存在用户数据目录。游戏更新后需要重新校验；失败时保留原缓存。</p>
+</main><script type="module" src="/setup.js"></script></html>

@@ -1,0 +1,12 @@
+{
+  "name": "nikki-studio-local",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "three": "0.183.0"
+  },
+  "scripts": {
+    "test": "node tests/save_roundtrip.mjs"
+  }
+}
