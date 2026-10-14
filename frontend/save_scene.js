@@ -14,6 +14,8 @@ import {installRenderQuality} from './render_quality.js';
 import {installWorkspacePlacement,localDragArrayLayout} from './workspace_placement.js';
 import {installBuildLegality} from './build_legality.js';
 import {installSaveValidation} from './workspace_validation.js';
+import {installPresets} from './workspace_presets.js';
+import {NO_ANCHOR,groundAnchor,savePositionToScene,scenePositionToSave} from './preset_geometry.js';
 import {cloneLoadedFurniture} from './scene_duplicate.js';
 import {notify} from './notices.js';
 import {TransformFrame,MultiTransformFrame} from './transform_frame.js';
@@ -219,7 +221,7 @@ import {installWorkspaceSelection} from './workspace_selection.js';
 import {SaveDocument} from './save_document.js';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
 
-let saveDocument=null,selectedIndex=-1,libraryMode=false,editorMode='select',dragStart=null,suppressPickUntil=0;
+let saveDocument=null,selectedIndex=-1,libraryMode=false,editorMode='select',dragStart=null,suppressPickUntil=0,presetPanel=null;
 const selectionHighlighter=new SelectionHighlight(()=>renderQuality.level);
 const sceneRows=new Map();
 const selectedNodes=new Set(),selectionOutlines=new T.Group();scene.add(selectionOutlines);
@@ -304,7 +306,7 @@ async function loadPlacementItem(id){
   renderQuality.prepare(node);return node;
 }
 function placementPositions(nodes,offset){return nodes.map(node=>({x:(node.position.x+offset.x)*100,y:(node.position.z+offset.z)*100,z:(node.position.y+offset.y)*100}));}
-function renderProperties(){$('nearTop').disabled=!selectedNode||readyRun!==run;$('isolate').disabled=!selectedNode;dyePanel.render([...selectedNodes]);const a=selectedNode?.userData;$('properties').hidden=!a;$('emptySelection').hidden=!!a;for(const id of ['grab','arrayDuplicate','curveDuplicate','duplicate','delete','focusSelection'])$(id).disabled=!a||readyRun!==run;if(!a)return;if(selectedNodes.size>1){$('selectedName').textContent=`${selectedNodes.size} 件物品`;$('selectedMeta').textContent='多选模式 · 共用中心移动、旋转 · 局部轴参考最后选中物品';for(const kind of ['position','rotation','scale'])$(kind+'Fields').replaceChildren();$('applyProperties').disabled=true;buildLegality.decorate([...selectedNodes].map(n=>n.userData.id));return;}$('applyProperties').disabled=false;$('selectedName').textContent=furniture[a.id]?.name??'物品';$('selectedMeta').textContent=`物品 ID ${a.id} · 实例 ${a.instance} · ${a.unmatched?'模型未匹配':'真实模型'}`;
+function renderProperties(){$('nearTop').disabled=!selectedNode||readyRun!==run;$('isolate').disabled=!selectedNode;dyePanel.render([...selectedNodes]);const a=selectedNode?.userData;$('properties').hidden=!a;$('emptySelection').hidden=!!a;for(const id of ['grab','arrayDuplicate','curveDuplicate','duplicate','delete','focusSelection'])$(id).disabled=!a||readyRun!==run;presetPanel?.setSaveEnabled(!!a&&readyRun===run);if(!a)return;if(selectedNodes.size>1){$('selectedName').textContent=`${selectedNodes.size} 件物品`;$('selectedMeta').textContent='多选模式 · 共用中心移动、旋转 · 局部轴参考最后选中物品';for(const kind of ['position','rotation','scale'])$(kind+'Fields').replaceChildren();$('applyProperties').disabled=true;buildLegality.decorate([...selectedNodes].map(n=>n.userData.id));return;}$('applyProperties').disabled=false;$('selectedName').textContent=furniture[a.id]?.name??'物品';$('selectedMeta').textContent=`物品 ID ${a.id} · 实例 ${a.instance} · ${a.unmatched?'模型未匹配':'真实模型'}`;
   const colors=dyeColorsForRow(a.raw);
   if(decodeDyeColors(colors).size)$('selectedMeta').textContent+=` · 存档配色 ${JSON.stringify(colors)} · ${a.dyeIssues?.length?'染色待补：'+a.dyeIssues.join('；'):'染色已匹配'}`;
   for(const kind of ['position','rotation','scale']){const host=$(kind+'Fields');host.replaceChildren();const axes=kind==='rotation'?[['z','Roll'],['x','Pitch'],['y','Yaw']]:[['x','X'],['y','Y'],['z','Z']];for(const [axis,label] of axes){const wrap=document.createElement('label');wrap.textContent=label;const input=document.createElement('input');input.type='number';input.step=kind==='scale'?'0.01':'1';input.value=Number(a[kind][axis].toFixed(4));input.dataset.field=kind+'.'+axis;input.onchange=()=>{const value=Number(input.value);if(!Number.isFinite(value)||(kind==='scale'&&value<=0)){renderProperties();return;}const transform=structuredClone({position:a.position,rotation:a.rotation,scale:a.scale});transform[kind][axis]=value;saveDocument.transform(selectedIndex,buildLegality.constrain(a.id,transform,kind));syncDocumentTransforms();};wrap.append(input);host.append(wrap);}}
@@ -371,6 +373,61 @@ async function syncDocumentDyes(){
   }catch(error){if(token===dyeUpdate)status.textContent='配色预览更新失败：'+error.message+'；存档配色已记录，可撤销。';}
 }
 async function rebuildEditor(index){gizmo.detach();outline.visible=false;entries=parse(saveDocument.data);await rebuild(true);if(index>=0&&group.children[index])selectEditorNode(group.children[index]);else{selectedIndex=-1;selectedNode=null;}renderWorkspace();}
+// A preset is the selection kept as a save fragment: the same items with their
+// transforms measured from the group's ground anchor, so it can be dropped
+// anywhere. Positions use the save axis order the rest of the editor writes.
+function presetSelection(){
+  const picked=[...selectedNodes].map(node=>({node,index:group.children.indexOf(node)})).filter(entry=>entry.index>=0&&saveDocument.rows[entry.index]);
+  if(!picked.length)return null;
+  const box=new T.Box3();
+  for(const {node} of picked){node.updateMatrixWorld(true);box.union(new T.Box3().setFromObject(node));}
+  if(box.isEmpty())throw Error('选中的物品还没有可用模型');
+  const anchor=groundAnchor(box);
+  return picked.map(({node,index})=>{
+    const row=saveDocument.rows[index],transform=readNodeTransform(node);
+    return {cfg_item_id:Number(node.userData.id),
+      attach_id:Number(row.furnitureInfo?.attach_id??0),
+      colors:structuredClone(dyeColorsForRow(row)??[0]),
+      trans:{position:scenePositionToSave(node.position,anchor),rotation:transform.rotation,scale:transform.scale}};
+  });
+}
+function presetSuggestedName(){
+  const names=[...selectedNodes].map(node=>furniture[node.userData.id]?.name).filter(Boolean);
+  if(!names.length)return '';
+  return names.length===1?names[0]:`${names[0]} 等 ${names.length} 件`;
+}
+async function placePreset(items,name){
+  if(!saveDocument||readyRun!==run)throw Error('工作区还没准备好');
+  gizmo.detach();
+  await placement.begin(async()=>{
+    const nodes=[];
+    for(const item of items){
+      const node=await loadPlacementItem(item.cfg_item_id),p=savePositionToScene(item.trans.position,NO_ANCHOR);
+      node.position.set(p.x,p.y,p.z);
+      node.quaternion.fromArray(saveRotationToScene(item.trans.rotation));
+      node.scale.set(item.trans.scale.x,item.trans.scale.z,item.trans.scale.y);
+      nodes.push(node);
+    }
+    return nodes;
+  },name,(nodes,offset)=>{
+    const started=performance.now(),positions=placementPositions(nodes,offset);
+    const rows=items.map((item,k)=>{
+      const transform=readNodeTransform(nodes[k]);
+      return {bIsAdd:true,instanceID:0,extra:{TempInfo:{}},
+        furnitureInfo:{group_id:0,attach_id:item.attach_id??0,cfg_item_id:item.cfg_item_id,
+          colors:structuredClone(item.colors??[0]),
+          trans:{position:positions[k],rotation:transform.rotation,scale:transform.scale}}};
+    });
+    const indices=saveDocument.addItems(rows);
+    indices.forEach((index,k)=>{const a=parse([saveDocument.rows[index]])[0],node=nodes[k];
+      setNodeEntry(node,a);entries.push(a);group.add(node);duplicateNodes.set(String(a.instance),node);renderQuality.prepare(node);});
+    finishDuplicateUpdate(nodes,started);
+    status.textContent=`已放置「${name}」· ${indices.length} 件`;
+    if(items.some(item=>(item.colors??[]).some(code=>code>0))){saveDocument.changedIndices=indices;syncDocumentDyes();}
+  });
+}
+presetPanel=installPresets({tab:$('presetTab'),panel:document.querySelector('.left-panel'),
+  selectionName:presetSuggestedName,saveSelection:presetSelection,placeItems:placePreset,notify});
 async function addFurniture(id){if(!saveDocument||readyRun!==run)return;gizmo.detach();await placement.begin(async()=>[await loadPlacementItem(id)],furniture[id]?.name??'物品',(nodes,offset)=>{
   const started=performance.now(),node=nodes[0],index=saveDocument.add(id,placementPositions(nodes,offset)[0],readNodeTransform(node).rotation),a=parse([saveDocument.rows[index]])[0];
   setNodeEntry(node,a);entries.push(a);group.add(node);duplicateNodes.set(String(a.instance),node);renderQuality.prepare(node);finishDuplicateUpdate([node],started);status.textContent='已放置 '+(furniture[id]?.name??'物品');
@@ -410,8 +467,8 @@ function changeGrabRotation(){
 }
 gizmo.addEventListener('dragging-changed',e=>{controls.enabled=!e.value;if(grabRotation){if(e.value){grabRotation.start=grabRotation.nodes.map(node=>({node,position:node.position.clone(),quaternion:node.quaternion.clone()}));if(grabRotation.frame===grabMultiFrame)grabMultiFrame.begin();}else{grabRotation.start=null;suppressPickUntil=performance.now()+200;attachGrabRotation();}return;}if(arrayState&&gizmo.object===arrayFrame){if(e.value){arrayState.axes=gizmo.axis??'X';panel.dataset.arrayDragAxis=arrayState.axes;}else{placement.update();suppressPickUntil=performance.now()+200;placement.confirm();if(arrayState){arrayFrame.position.copy(arrayState.start);placement.update();}}return;}if(e.value){dragStart=[...selectedNodes].map(node=>({node,index:group.children.indexOf(node),position:node.position.clone(),quaternion:node.quaternion.clone()}));if(gizmo.object===multiTransformFrame.object)multiTransformFrame.begin();}else if(dragStart&&selectedNode){const changes=dragStart.map(({node,index})=>{const value=readNodeTransform(node);if(editorMode!=='rotate')value.rotation=structuredClone(entries[index].rotation);if(editorMode!=='scale')value.scale=structuredClone(entries[index].scale);for(const kind of ['position','rotation','scale'])for(const axis of ['x','y','z'])if(Math.abs(value[kind][axis]-entries[index][kind][axis])<1e-6)value[kind][axis]=entries[index][kind][axis];return{index,value};});if(changes.length===1)saveDocument.transform(changes[0].index,changes[0].value);else saveDocument.transformMany(changes);dragStart=null;suppressPickUntil=performance.now()+200;syncDocumentTransforms();}});
 gizmo.addEventListener('objectChange',()=>{if(grabRotation){changeGrabRotation();return;}if(arrayState&&gizmo.object===arrayFrame){placement.update();return;}if(!selectedNode)return;const started=performance.now();if(gizmo.object===transformFrame.object)transformFrame.apply(editorMode);if(gizmo.object===multiTransformFrame.object)multiTransformFrame.apply(editorMode);enforceDragLegality();const writes=batches.syncOwners(selectedNodes);panel.dataset.transformCpuMs=(performance.now()-started).toFixed(2);panel.dataset.transformInstanceWrites=String(writes);});
-$('sceneTab').onclick=()=>{libraryMode=false;$('sceneTab').classList.add('active');$('libraryTab').classList.remove('active');renderList();};
-$('libraryTab').onclick=()=>{libraryMode=true;$('libraryTab').classList.add('active');$('sceneTab').classList.remove('active');renderList();};
+$('sceneTab').onclick=()=>{presetPanel?.leave();libraryMode=false;$('sceneTab').classList.add('active');$('libraryTab').classList.remove('active');renderList();};
+$('libraryTab').onclick=()=>{presetPanel?.leave();libraryMode=true;$('libraryTab').classList.add('active');$('sceneTab').classList.remove('active');renderList();};
 $('majorCategory').onchange=()=>{$('minorCategory').value='';renderList();};$('minorCategory').onchange=renderList;
 let searchTimer;$('sceneSearch').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(renderList,120);};
 $('importSave').onclick=()=>$('save').click();

@@ -6,7 +6,9 @@ export class SaveDocument {
     this.key=Array.isArray(raw)?null:['Snapshots','PlaceInfo'].find(k=>Array.isArray(raw?.[k])||empty(raw?.[k]));
     if(!Array.isArray(raw)&&!this.key)throw Error('存档需要 Snapshots 或 PlaceInfo 数组');
     this.emptyObjectCollection=!!this.key&&empty(raw[this.key]);
-    this.data=copy(raw);this.name=name;this.undoStack=[];this.redoStack=[];this.revision=0;this.savedRevision=0;this.nextRevision=1;this.idFloor=Math.max(0,...this.rows.map(r=>Number(r.instanceID??r.InstanceID)||0));
+    this.data=copy(raw);this.name=name;this.undoStack=[];this.redoStack=[];this.revision=0;this.savedRevision=0;this.nextRevision=1;
+    // Every id the loaded save already used is an id the game already knows.
+    this.idFloor=Math.max(0,...this.rows.map(r=>Number(r.instanceID??r.InstanceID)||0));
   }
   get data(){return this.emptyObjectCollection&&this.rows.length===0?{...this._data,[this.key]:{}}:this._data;}
   set data(value){this._data=value;if(this.key&&value[this.key]!==null&&!Array.isArray(value[this.key])&&Object.keys(value[this.key]).length===0)value[this.key]=[];}
@@ -45,9 +47,59 @@ export class SaveDocument {
     this.undoStack.push({label:'修改变换',patches,from:this.revision,to:revision});
     if(this.undoStack.length>30)this.undoStack.shift();this.changedIndices=patches.map(p=>p.index);this.revision=revision;this.redoStack=[];return true;
   }
+  // The game keys an item by instance id and keeps its own type for any id it has
+  // seen, so a new row must never take an id the loaded save already used -- not
+  // even one freed by a delete. The floor is that save's high-water mark.
   nextId(){return this.idFloor=Math.max(this.idFloor,...this.rows.map(r=>Number(r.instanceID??r.InstanceID)||0))+1;}
+  // The game keys an item by its instance id and not by the item field: for an id
+  // it has already seen it keeps the type it remembers and ignores what the row
+  // says. A row landing on an id the save being overwritten uses for a different
+  // item therefore comes back as that item, so it is given a fresh id above every
+  // id either side has used, and anything attached to it moves along with it.
+  // Rows that already agree with that save are left alone. Not an undo step: the
+  // game assigned these identities, the user did not.
+  alignInstanceIds(existing){
+    const rows=Array.isArray(existing)?existing:existing?.Snapshots??existing?.PlaceInfo??[];
+    const known=new Map();
+    for(const row of rows){const id=Number(row.instanceID??row.InstanceID);if(Number.isFinite(id))known.set(id,row.furnitureInfo?.cfg_item_id??row.ItemID);}
+    let top=this.idFloor;
+    for(const row of this.rows)top=Math.max(top,Number(row.instanceID??row.InstanceID)||0);
+    for(const id of known.keys())top=Math.max(top,id);
+    const moved=new Map();
+    for(const row of this.rows){
+      const id=Number(row.instanceID??row.InstanceID),other=known.get(id);
+      if(other!==undefined&&other!==(row.furnitureInfo?.cfg_item_id??row.ItemID))moved.set(id,++top);
+    }
+    if(!moved.size)return 0;
+    for(const row of this.rows){
+      const id=Number(row.instanceID??row.InstanceID);
+      if(moved.has(id)){if(row.furnitureInfo)row.instanceID=moved.get(id);else row.InstanceID=moved.get(id);}
+      if(row.furnitureInfo&&moved.has(row.furnitureInfo.attach_id))row.furnitureInfo.attach_id=moved.get(row.furnitureInfo.attach_id);
+      if(moved.has(row.attach_id))row.attach_id=moved.get(row.attach_id);
+    }
+    this.idFloor=top;return moved.size;
+  }
+  // Several rows arrive as one gesture, so they share a single undo step. Each
+  // gets a fresh instance id; grouping is dropped the same way duplicate does.
+  addItems(entries){
+    if(!entries.length)return [];
+    let id=this.nextId();const start=this.rows.length;
+    const added=entries.map(entry=>{
+      const row=copy(entry);
+      if(row.furnitureInfo){row.instanceID=id++;row.furnitureInfo.group_id=0;}
+      else row.InstanceID=id++;
+      return row;
+    });
+    this.idFloor=Math.max(this.idFloor,id-1);
+    this.commitSplices('放置预设',[{index:start,removed:[],added}]);
+    return added.map((_,i)=>start+i);
+  }
   duplicate(index){return this.duplicateMany([index])[0];}
-  add(item,position,rotation={x:0,y:0,z:0}){const id=this.nextId();this.commit('添加物品',rows=>{rows.push(this.key==='PlaceInfo'?{ItemID:Number(item),InstanceID:id,Location:{X:position.x,Y:position.y,Z:position.z},Rotation:{Pitch:rotation.x,Yaw:rotation.y,Roll:rotation.z},Scale:{X:1,Y:1,Z:1}}:{bIsAdd:false,instanceID:id,furnitureInfo:{group_id:0,attach_id:0,cfg_item_id:Number(item),colors:[0],trans:{position:copy(position),rotation:copy(rotation),scale:{x:1,y:1,z:1}}},extra:{TempInfo:{}}});});return this.rows.length-1;}
+  // The game writes bIsAdd on the rows it just registered, so a row the editor
+  // creates carries it too and the export looks like one the game wrote itself.
+  // It is not what decides whether a type is kept: a row is reconciled by
+  // instance id alone, which is why nextId must not reuse one.
+  add(item,position,rotation={x:0,y:0,z:0}){const id=this.nextId();this.commit('添加物品',rows=>{rows.push(this.key==='PlaceInfo'?{ItemID:Number(item),InstanceID:id,Location:{X:position.x,Y:position.y,Z:position.z},Rotation:{Pitch:rotation.x,Yaw:rotation.y,Roll:rotation.z},Scale:{X:1,Y:1,Z:1}}:{bIsAdd:true,instanceID:id,furnitureInfo:{group_id:0,attach_id:0,cfg_item_id:Number(item),colors:[0],trans:{position:copy(position),rotation:copy(rotation),scale:{x:1,y:1,z:1}}},extra:{TempInfo:{}}});});return this.rows.length-1;}
   applySplices(splices,undo=false){
     const ordered=[...splices].sort((a,b)=>undo?a.index-b.index:b.index-a.index);
     for(const p of ordered)this.rows.splice(p.index,(undo?p.added:p.removed).length,...copy(undo?p.removed:p.added));
@@ -62,8 +114,9 @@ export class SaveDocument {
   removeMany(indices){return this.commitSplices('删除物品',[...new Set(indices)].sort((a,b)=>a-b).map(index=>({index,removed:[copy(this.rows[index])],added:[]})));}
   duplicateMany(indices,positions=null,rotations=null){
     let id=this.nextId();const start=this.rows.length;
-    const added=indices.map((index,i)=>{const row=copy(this.rows[index]);if(row.furnitureInfo){row.instanceID=id++;if(positions)row.furnitureInfo.trans.position={...row.furnitureInfo.trans.position,...positions[i]};else row.furnitureInfo.trans.position.x+=100;row.furnitureInfo.attach_id=0;row.furnitureInfo.group_id=0;}else{row.InstanceID=id++;if(positions)row.Location={...row.Location,X:positions[i].x,Y:positions[i].y,Z:positions[i].z};else row.Location.X+=100;}if(rotations){const r=rotations[i];if(row.furnitureInfo)row.furnitureInfo.trans.rotation=copy(r);else row.Rotation={...row.Rotation,Pitch:r.x,Yaw:r.y,Roll:r.z};}return row;});
-    this.idFloor=Math.max(this.idFloor,id-1);this.commitSplices('复制物品',added.length?[{index:start,removed:[],added}]:[]);return added.map((_,i)=>start+i);
+    const added=indices.map((index,i)=>{const row=copy(this.rows[index]);if(row.furnitureInfo){row.instanceID=id++;row.bIsAdd=true;if(positions)row.furnitureInfo.trans.position={...row.furnitureInfo.trans.position,...positions[i]};else row.furnitureInfo.trans.position.x+=100;row.furnitureInfo.attach_id=0;row.furnitureInfo.group_id=0;}else{row.InstanceID=id++;if(positions)row.Location={...row.Location,X:positions[i].x,Y:positions[i].y,Z:positions[i].z};else row.Location.X+=100;}if(rotations){const r=rotations[i];if(row.furnitureInfo)row.furnitureInfo.trans.rotation=copy(r);else row.Rotation={...row.Rotation,Pitch:r.x,Yaw:r.y,Roll:r.z};}return row;});
+    this.idFloor=Math.max(this.idFloor,id-1);
+    this.commitSplices('复制物品',added.length?[{index:start,removed:[],added}]:[]);return added.map((_,i)=>start+i);
   }
   serialize(){return JSON.stringify(this.data,null,2);}
 }

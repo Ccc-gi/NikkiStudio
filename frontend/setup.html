@@ -9,7 +9,7 @@
 <p class="hint">从你选择的来源取得匹配输入。<a href="https://gacha.lukefz.xyz/infinitynikki/keys" target="_blank" rel="noreferrer">AES 参考来源</a> · <a href="https://gacha.lukefz.xyz/infinitynikki/mappings" target="_blank" rel="noreferrer">映射参考来源</a>。来源不可用时仍可使用已有本地文件。</p>
 <label>usmap 二进制文件<input id="usmap" type="file" accept=".usmap" required></label>
 <label>资源解析器<div class="row"><input id="parser" required placeholder="cue4parse.exe 的位置"><button type="button" data-browse="parser">选择程序</button></div></label>
-<details><summary>可选：家具名称与尺寸</summary><label>本地 BuildingMomo 家具数据 JSON<div class="row"><input id="metadataFile"><button type="button" data-browse="metadata">选择文件</button></div></label></details>
+<details><summary>可选：家具名称与尺寸</summary><label>本地 BuildingMomo 家具数据 JSON<div class="row"><input id="metadataFile"><button type="button" data-browse="metadata">选择文件</button></div></label><p class="hint">为尚未取到本机名称的物品提供回退名称与尺寸。建造限制、染色方案与可建造区域都已从游戏自身数据读取，不需要这个文件。</p></details>
 <button id="submit" class="primary">校验并连接游戏</button>
 </form>
 <div id="progress" role="status" aria-live="polite">正在检查本地服务…</div>

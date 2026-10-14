@@ -15,6 +15,8 @@ from backend.config import load_keys, usmap_header
 from backend.storage import digest, write_json
 from asset_pipeline.iostore import fingerprint, index
 from adapters.paperbin import parse as parse_paperbin
+from adapters.build_rules import parse as parse_build_rules
+from adapters import build_area as build_area_data
 from adapters.blueprint_transforms import BlueprintTransforms
 from adapters.archive_order import select_current
 from adapters.paperbin_dye import parse_dye
@@ -65,7 +67,10 @@ class Runtime:
         self.rows = {}
         self.mapping = {}
         self.metadata = {}
+        self.constraints = {}
+        self.build_area = {}
         self.dye_configs = {}
+        self.dye_schemes = {}
         self.catalog_items = {}
         self.catalog_categories = {}
         self.catalog_report = {}
@@ -97,7 +102,22 @@ class Runtime:
             raise ValueError('缺少 X6Game/Saved/PaperBin，请先进入游戏加载家园配置')
         paper_data = paper.read_bytes()
         self.rows = {str(k): v for k, v in parse_paperbin(paper_data).items()}
+        # The game states each item's own build limits, so the editor's
+        # 建造合法性 switch and the save check need nothing from the user.
+        for ident, rule in parse_build_rules(paper_data).items():
+            self.constraints[str(ident)] = rule
+        self.build_area = {'polygons': build_area_data.POLYGONS,
+                           'unlocks': build_area_data.UNLOCKS}
         self.dye_configs = parse_dye(paper_data)
+        # The presets each item offers, as area*10 + choice, so the save check can
+        # tell a dye the item supports from one it does not.
+        self.dye_schemes = {}
+        for ident, config in self.dye_configs.items():
+            codes = sorted({int(group) * 10 + int(choice)
+                            for group, choices in config.items()
+                            for choice in choices if int(choice)})
+            if codes:
+                self.dye_schemes[ident] = codes
         try:
             self.catalog_items,self.catalog_categories,self.catalog_report=parse_catalog(paper_data,self.rows)
             write_json(self.directory/'catalog-v1.json',{'items':self.catalog_items,'categories':self.catalog_categories,'report':self.catalog_report})
@@ -522,6 +542,18 @@ class Runtime:
     def categories(self):
         return {'categories':{ident:{**row,'icon':self.icon_url(row.get('sourceIcon')) or '/placeholder.svg'}
                               for ident,row in self.catalog_categories.items()},'report':self.catalog_report}
+
+    # Per-item build limits plus the buildable area, for the editor's 建造合法性
+    # switch and the save check. The limits are read from the game's own records,
+    # so the feature works without the optional furniture data, and the plot
+    # regions ship with the editor.
+    def validation_rules(self):
+        return {'source': 'game PaperBin',
+                'version': self.version,
+                'constraints': self.constraints,
+                'dyeSchemes': self.dye_schemes,
+                'polygons': self.build_area.get('polygons', {}),
+                'unlocks': self.build_area.get('unlocks', [])}
 
     def icon_url(self,reference):
         if not reference:return None

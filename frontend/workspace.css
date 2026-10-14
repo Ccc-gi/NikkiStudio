@@ -173,3 +173,28 @@ body.single-preview .scene-view-actions{display:none}
 .natural-sun-controls .settings-diagnostics summary{font-size:12px}
 .natural-sun-controls .settings-diagnostics .environment-brightness{margin:8px 0}
 .natural-sun-controls .settings-diagnostics .environment-brightness input:disabled{opacity:.45}
+
+/* Item presets. The scene list yields the left panel while the tab is open, so
+   the swap is a class on the panel and never touches its own hidden state. */
+.left-panel .tabs{flex-wrap:wrap}
+.left-panel .tabs button{flex:1 1 auto;min-width:0;padding:8px 6px;white-space:nowrap}
+.left-panel.preset-mode .panel-intro,
+.left-panel.preset-mode #categoryTools,
+.left-panel.preset-mode #subcategoryTools,
+.left-panel.preset-mode .category-filters,
+.left-panel.preset-mode #sceneSearch,
+.left-panel.preset-mode #sceneList,
+.left-panel.preset-mode #listNote{display:none}
+.preset-panel{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:0 10px 10px}
+.preset-panel[hidden]{display:none}
+.preset-actions{display:flex;padding-top:10px}
+.preset-actions button{width:100%}
+.preset-panel #presetList{flex:1;min-height:0;overflow:auto;padding:0}
+.preset-row{display:flex;gap:6px;align-items:stretch;margin-bottom:6px}
+.preset-place{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;text-align:left;padding:9px 11px;border:1px solid #8fa6a522;border-radius:13px;background:#ffffff05}
+.preset-place:hover{background:#82d3b51a;border-color:#8be4c366}
+.preset-place strong{font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.preset-place small{font-size:11px;color:#9db0bd}
+.preset-remove{font-size:12px;padding:0 10px;border-radius:13px;background:#ffffff08;color:#e0b3ae}
+.preset-remove:hover{background:#ffb8b01f}
+.preset-empty{margin:4px 2px;color:#9db0bd;font-size:12px;line-height:1.8}

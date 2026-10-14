@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from backend.config import save_config
+from backend.presets import Presets
 from backend.storage import Storage, write_json
 from asset_pipeline.runtime import Runtime
 
@@ -26,6 +27,7 @@ def bundled_parser():
 class Application:
     def __init__(self, storage=None):
         self.storage = storage or Storage()
+        self.presets = Presets(self.storage.root)
         self.token = secrets.token_urlsafe(32)
         self.runtime = None
         self.job = {'state': 'idle', 'message': '请选择游戏和输入文件'}
@@ -216,8 +218,13 @@ def handler_for(app):
                     return self.send(app.runtime.catalog() if app.runtime else {})
                 if path == '/furniture_categories.json':
                     return self.send(app.runtime.categories() if app.runtime else {'categories':{},'report':{'state':'not_ready'}})
+                if path == '/api/presets':
+                    return self.send({'presets': app.presets.list()})
+                if path.startswith('/api/presets/'):
+                    return self.send(app.presets.read(path.removeprefix('/api/presets/')))
                 if path == '/save_validation_rules.json':
-                    return self.send({'source': 'No current game constraints loaded', 'version': 'unverified',
+                    return self.send(app.runtime.validation_rules() if app.runtime else
+                                     {'source': 'not ready', 'version': 'unverified',
                                       'constraints': {}, 'polygons': {}})
                 if path in ('/scene_material_manifest.json', '/texture_lod_manifest.json', '/asset_versions.json'):
                     return self.send({})
@@ -300,6 +307,12 @@ def handler_for(app):
                     self.send({'stopping': True})
                     threading.Thread(target=self.server.shutdown, daemon=True).start()
                     return
+                if path == '/api/presets':
+                    return self.send(app.presets.save(values.get('name'), values.get('items')))
+                if path == '/api/presets/rename':
+                    return self.send(app.presets.rename(values.get('id'), values.get('name')))
+                if path == '/api/presets/delete':
+                    return self.send(app.presets.remove(values.get('id')))
                 if path == '/api/browse':
                     # Runs on this request thread; Windows dialog is explicitly user-triggered.
                     import tkinter as tk
