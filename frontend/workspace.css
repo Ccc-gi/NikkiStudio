@@ -169,3 +169,7 @@ body.single-preview .scene-view-actions{display:none}
 .notice-error{border-left-color:#ef8b8b}
 .notice-error .notice-action{color:#f2a0a0}
 @media (prefers-reduced-motion:reduce){.notice{transition:none}.notice-leaving{opacity:0;transform:none}}
+.natural-sun-controls .settings-diagnostics{margin-top:12px}
+.natural-sun-controls .settings-diagnostics summary{font-size:12px}
+.natural-sun-controls .settings-diagnostics .environment-brightness{margin:8px 0}
+.natural-sun-controls .settings-diagnostics .environment-brightness input:disabled{opacity:.45}
