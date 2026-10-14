@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TOP = {'README.md', 'LICENSE', 'NOTICE.md', '.gitignore', 'requirements.txt', 'requirements-build.txt',
        'package.json', 'package-lock.json', 'config.example.json', 'keys.example.json', 'start.py', 'launch.py'}
 FOLDERS = {'frontend', 'backend', 'asset_pipeline', 'adapters', 'tests', 'docs', 'third_party', '.github'}
-SCRIPTS = {'audit_release.py', 'build_release.py', 'setup_dependencies.py', 'build_parser_worker.py'}
+SCRIPTS = {'audit_release.py', 'build_release.py', 'setup_dependencies.py', 'build_parser_worker.py', 'dev_preview.py'}
 
 
 def release_files():
