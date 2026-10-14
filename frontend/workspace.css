@@ -128,6 +128,8 @@
 body.single-preview .scene-view-actions{display:none}
 .selected-view-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
 .selected-view-actions button{font-size:12px;border-color:#3b4d5d;padding:7px 9px}
+.property-isolation{display:flex;align-items:center;gap:8px;width:100%;padding:9px 10px;border:1px solid #3b4d5d;border-radius:6px;font-size:12px;cursor:pointer}
+.property-isolation input{margin:0}
 .settings-dialog{width:min(780px,calc(100vw - 32px));max-height:calc(100dvh - 48px);padding:0;border:1px solid #435565;border-radius:14px;background:#202a34;color:#e0e9ed;box-shadow:0 24px 80px #0008}
 .settings-dialog[open]{display:flex;flex-direction:column}
 .settings-dialog::backdrop{background:#0d1723a8;backdrop-filter:blur(3px)}
