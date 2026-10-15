@@ -85,7 +85,7 @@ export function alignedPlacementQuaternion(node,targetQuaternion){
 export function installWorkspacePlacement({scene,camera,canvas,panel,status,pickSurface,onFinish,onRotationStart=()=>{},onRotationEnd=()=>{},onMoveStart=()=>{},onMoveEnd=()=>{}}){
   const root=new T.Group();scene.add(root);
   const ray=new T.Raycaster(),pointer=new T.Vector2(),point=new T.Vector3(),plane=new T.Plane(new T.Vector3(0,1,0),0);
-  const hint=document.createElement('div');hint.hidden=true;hint.style.cssText='position:absolute;bottom:48px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:12px;background:#173c36ee;color:#b8ffe4;pointer-events:none;z-index:20;max-width:calc(100% - 32px);width:max-content;text-align:center;font-size:12px;line-height:1.6';panel.append(hint);
+  const hint=document.createElement('div');hint.className='placement-hint';hint.hidden=true;panel.append(hint);
   const rotationUi=document.createElement('div');rotationUi.className='placement-rotation-ui';rotationUi.hidden=true;
   const rotationLabel=document.createElement('span'),accept=document.createElement('button'),reject=document.createElement('button');
   accept.textContent='确认旋转 · R';reject.textContent='取消旋转';rotationUi.append(rotationLabel,accept,reject);panel.append(rotationUi);

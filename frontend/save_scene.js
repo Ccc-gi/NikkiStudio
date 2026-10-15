@@ -1,6 +1,10 @@
 import {textureQualityForLevel} from './texture_quality.js';
 import {installWorkspaceSettings} from './workspace_settings.js';
 installWorkspaceSettings();
+import {installCursorStyle} from './cursor_style.js';
+installCursorStyle();
+import {installAppbarMenu} from './appbar_menu.js';
+installAppbarMenu();
 import {installGameFiles} from './workspace_game_files.js';
 import {prepareScene} from './scene_prepare.js';
 import {updateDyeManifest,updateMaterialManifest} from './furniture_materials.js';
@@ -9,7 +13,6 @@ import {installDyePanel} from './workspace_dye_panel.js';
 import {decodeDyeColors,dyeColorsForRow,setDyeArea} from './furniture_dye.js';
 import {installSceneOverview} from './scene_overview.js';
 import {installCurveArray} from './workspace_curve_array.js';
-import {installViewCube} from './workspace_view_cube.js';
 import {installRenderQuality} from './render_quality.js';
 import {installWorkspacePlacement,localDragArrayLayout} from './workspace_placement.js';
 import {installBuildLegality} from './build_legality.js';
@@ -211,7 +214,7 @@ async function initial(){try{
   [furniture,mapping]=loaded;categories=loaded[2].categories;
   const report=loaded[2].report??{},catalogStatus=document.getElementById('catalogStatus');
   catalogStatus.textContent=report.error??`当前游戏目录 · 名称 ${report.named??0} 款 · 已分类 ${report.classified??0} 款${report.missingItems?.length?` · ${report.missingItems.length} 款缺少目录记录，保留 ID 显示`:''}`;
-  if(report.error)catalogStatus.style.color='#edb68c';
+  if(report.error)catalogStatus.style.color='var(--warn)';
   if(recovery){mapping=await fetch('/api/recovery-mapping').then(r=>r.json());notify('旧缓存恢复视图：只显示已有模型，不代表当前游戏版本。',{key:'recovery',level:'warn'});}
   openDocument({PlaceInfo:[]},'新家园存档.json');await rebuild();renderWorkspace();
 }catch(e){status.textContent='初始化失败：'+e.message}};
@@ -258,7 +261,6 @@ function applySelection(nodes,add=false,crossing=false){const started=performanc
 function updateOutline(){outline.visible=false;clearSelectionOutlines();selectionHighlighter.apply(selectedNodes,batches);panel.dataset.selectionHighlight='model';}
 installWorkspaceSelection({canvas:r.domElement,panel,camera,controls,gizmo,nodes:()=>group.children,onSelect:(nodes,add,crossing)=>{applySelection(nodes,add,crossing);if(nodes.length)revealSceneSelection();},onClick:(e,add)=>{if(performance.now()<suppressPickUntil)return;const b=r.domElement.getBoundingClientRect();mouse.set((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1);ray.setFromCamera(mouse,camera);const hit=ray.intersectObjects([...group.children,...batches.pool.children],true).find(h=>batches.owner(h,group));if(!hit)setMode('select');selectEditorNode(hit?batches.owner(hit,group):null,add,true);}});
 initWorkspacePanels();
-installViewCube({panel,camera,controls,onHome:()=>fit()});
 const viewMenu=installWorkspaceContextMenu({canvas:r.domElement,panel,nodes:()=>group.children,selection:()=>selectedNodes,catalog:()=>furniture,refresh:()=>{refreshBatches();applyClay();},onVisibility:()=>renderList(),syncVisibility:()=>{viewMenu.applyVisibility();batches.sync(group);updateOutline();},onChange:text=>status.textContent=text,editAction:action=>{if(['translate','rotate','scale'].includes(action))setMode(action);else document.getElementById(action).click();},canEdit:action=>readyRun===run&&!gizmo.dragging&&selectedNodes.size>0&&(action!=='scale'||selectedNodes.size===1),select:(node,add)=>selectEditorNode(node,add,true),pick:e=>{const b=r.domElement.getBoundingClientRect();mouse.set((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1);ray.setFromCamera(mouse,camera);const hit=ray.intersectObjects([...group.children,...batches.pool.children],true).find(h=>batches.owner(h,group));return hit?batches.owner(hit,group):null;}});
 function placementSurface(ray){return ray.intersectObjects([...group.children,...batches.pool.children],true).find(h=>{
   const owner=batches.owner(h,group);if(!owner?.visible||!h.face)return false;
@@ -354,7 +356,7 @@ const sceneOverview=installSceneOverview({list:$('sceneList'),isVisible:row=>Boo
   panel.dataset.locatedInstance=String(row.instance);
 },onRender:(count,groups)=>{$('objectCount').textContent=`${groups} 款 / ${count} 件`;$('listTitle').textContent='场景物品总览';$('listNote').textContent='同款展开管理 · 点击实例定位 · 眼睛切换显示';}});
 function renderList(){const term=$('sceneSearch').value.trim().toLowerCase(),list=$('sceneList'),scroll=list.scrollTop;const existing=new Map([...list.children].map(b=>[b.dataset.rowKey,b]));sceneRows.clear();const source=libraryMode?Object.entries(furniture).filter(([id])=>mapping[id]?.path).map(([id,f])=>({id,name:f.name})):entries.map((a,index)=>({...a,index,name:furniture[a.id]?.name??'物品'}));populateCategories($('majorCategory'),$('minorCategory'),source,furniture,categories);renderToolboxCategories($('majorCategory'),$('minorCategory'),categories,renderList);list.classList.toggle('resource-grid',libraryMode);const filtered=source.filter(a=>matchesCategory(furniture[a.id]?.categoryId,$('majorCategory').value,$('minorCategory').value,categories)&&`${a.name} ${a.id} ${a.instance??''}`.toLowerCase().includes(term));$('objectCount').textContent=`${filtered.length} / ${source.length}`;$('listTitle').textContent=libraryMode?'挑选你的物品':'家园里的物品';$('listNote').textContent=libraryMode?'点击拿起物品 · 鼠标移动预览 · 左键放置 · 右键取消':'单击选择 · 双击聚焦';if(!libraryMode){sceneOverview.render(filtered,source,term);return;}sceneOverview.hide();const desired=[];for(const a of filtered){const key=libraryMode?'resource:'+a.id:'instance:'+a.instance;let b=existing.get(key);const fresh=!b;if(fresh)b=document.createElement('button');b.dataset.rowKey=key;b.dataset.index=String(a.index??'');b.className='object-row'+(!libraryMode&&selectedNodes.has(group.children[a.index])?' active':'');if(!libraryMode)sceneRows.set(a.index,b);if(fresh)resourceButtonContents(b,a,libraryMode,furniture,categories);b.onclick=e=>libraryMode?addFurniture(a.id):selectEditorNode(group.children[Number(b.dataset.index)],e.shiftKey||e.ctrlKey||e.metaKey);b.ondblclick=()=>{if(!libraryMode){selectEditorNode(group.children[Number(b.dataset.index)]);focusEditor();}};desired.push(b);}const keep=new Set(desired);for(const b of [...list.children])if(!keep.has(b))b.remove();desired.forEach((b,i)=>{if(list.children[i]!==b)list.insertBefore(b,list.children[i]??null);});list.scrollTop=scroll;}
-function renderWorkspace(refreshList=true){if(!saveDocument)return;saveValidation.schedule();$('documentName').textContent=saveDocument.name;$('dirtyBadge').textContent=saveDocument.dirty?'● 未保存修改':'已载入';$('undo').disabled=!saveDocument.undoStack.length;$('redo').disabled=!saveDocument.redoStack.length;$('exportSave').disabled=readyRun!==run;gameFiles.refresh();if(refreshList)renderList();renderProperties();}
+function renderWorkspace(refreshList=true){if(!saveDocument)return;saveValidation.schedule();$('documentName').textContent=saveDocument.name;$('dirtyBadge').textContent=saveDocument.dirty?'● 未保存修改':'已载入';$('undo').disabled=!saveDocument.undoStack.length;$('redo').disabled=!saveDocument.redoStack.length;$('exportSave').disabled=$('saveDocument').disabled=readyRun!==run;gameFiles.refresh();if(refreshList)renderList();renderProperties();}
 function syncDocumentTransforms(){const started=performance.now(),indices=saveDocument.changedIndices??group.children.map((_,i)=>i),owners=[];for(const i of indices){const node=group.children[i];if(!node)continue;const a=parse([saveDocument.rows[i]])[0];entries[i]=a;node.userData={...node.userData,...a};node.position.set(a.position.x/100,a.position.z/100,a.position.y/100);node.quaternion.fromArray(saveRotationToScene(a.rotation));node.scale.set(a.scale.x,a.scale.z,a.scale.y);owners.push(node);}batches.syncOwners(owners);grassGround.invalidate(group);attachTransformHandle();renderWorkspace(false);panel.dataset.transformCommitCpuMs=(performance.now()-started).toFixed(2);panel.dataset.transformCommitOwners=String(owners.length);}
 let dyeUpdate=0;
 async function changeSelectedDye(area,index,nodes){
@@ -494,7 +496,6 @@ $('sceneTab').onclick=()=>{presetPanel?.leave();libraryMode=false;$('sceneTab').
 $('libraryTab').onclick=()=>{presetPanel?.leave();libraryMode=true;$('libraryTab').classList.add('active');$('sceneTab').classList.remove('active');renderList();};
 $('majorCategory').onchange=()=>{$('minorCategory').value='';renderList();};$('minorCategory').onchange=renderList;
 let searchTimer;$('sceneSearch').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(renderList,120);};
-$('importSave').onclick=()=>$('save').click();
 $('applyProperties').onclick=()=>{if(!selectedNode||readyRun!==run)return;const value=structuredClone({position:selectedNode.userData.position,rotation:selectedNode.userData.rotation,scale:selectedNode.userData.scale});for(const input of $('properties').querySelectorAll('[data-field]')){const [kind,axis]=input.dataset.field.split('.'),number=Number(input.value);if(!Number.isFinite(number)||(kind==='scale'&&number<=0)){status.textContent='请填写有效数字，缩放倍率需要大于 0。';return;}value[kind][axis]=number;}saveDocument.transform(selectedIndex,buildLegality.constrain(selectedNode.userData.id,value,'properties'));syncDocumentTransforms();};
 function downloadValidatedSave(data,corrected=false){const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=saveDocument.name.replace(/\.json$/i,'')+(corrected?'_validated':'_edited')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status.textContent=corrected?'已按 Momo 规则修正导出；工作区保持原样。':'已导出当前数据；工作区保持原样。';}
 const saveValidation=installSaveValidation({getDocument:()=>saveDocument,selectIndices:indices=>{restoreVisibility();applySelection(indices.map(i=>group.children[i]).filter(Boolean));focusEditor();},exportData:downloadValidatedSave});
@@ -603,7 +604,7 @@ window.addEventListener('keydown',e=>{
   if(e.target.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])')||e.isComposing)return;
   const key=e.key.toLowerCase();
   if(e.ctrlKey||e.metaKey){
-    const id={z:e.shiftKey?'redo':'undo',y:'redo',s:e.shiftKey?'exportSave':'saveGame',d:'duplicate',c:'duplicate',v:'duplicate'}[key];
+    const id={z:e.shiftKey?'redo':'undo',y:'redo',s:e.shiftKey?'exportSave':'saveDocument',d:'duplicate',c:'duplicate',v:'duplicate'}[key];
     if(id){e.preventDefault();if(!e.repeat&&!gizmo.dragging&&(!placement.active||id==='undo')&&!$(id).disabled)$(id).click();}
     return;
   }

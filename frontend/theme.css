@@ -1,0 +1,42 @@
+/* 大喵主题色板。workspace.css 与 setup.css 都从这里取变量，换配色只改这个文件。
+   取自大喵：兜帽黄 #F5C24A / 呆毛橙 #E8913A / 暖白身体 / 领结砖红 / 腮红粉。
+   正文色都按 4.5:1 以上对比度挑过，黄只做填充不做文字（黄在白底上读不出来）。 */
+:root{
+  --bg:#FFF9EE;            /* 应用底：奶油 */
+  --surface:#FFFFFF;       /* 面板 */
+  --surface-2:#FDF3DE;     /* 次级面：工具栏、页脚、侧栏 */
+  --surface-3:#F7EAD0;     /* 视口衬底 */
+  --line:#F0D9A8;          /* 常规描边 */
+  --line-2:#E3C489;        /* 强描边 */
+  --ink:#4A3A28;           /* 正文（暖褐，非纯黑） */
+  --ink-2:#786351;         /* 次要文字（最差组合：叠在渐变色块上仍有 4.7:1） */
+  --ink-3:#857052;         /* 只给图标/字形用（3:1）。米色底上留不出既更淡又过 4.5 的第三层文字，文字一律走 --ink-2 */
+  --accent:#E8913A;        /* 强调：描边、图标、焦点框 */
+  --accent-text:#9A5611;   /* 强调文字（压深后才够对比度） */
+  --accent-fill:#F5C24A;   /* 强调填充：主按钮底 */
+  --accent-ink:#3A2A08;    /* 压在黄底上的字 */
+  --accent-soft:#FDF0D2;   /* 选中/悬停的淡黄底 */
+  --accent-soft-2:#FBE3B0;
+  --hover:#F5EAD5;         /* 中性悬停底 */
+  --danger:#BE4632;        /* 领结砖红 */
+  --danger-soft:#FBE3DD;
+  --ok:#337A4B;
+  --warn:#8E5A0E;          /* 警告。要当小字用，必须压到白底 5.8:1 */
+  --axis-x:#BE4632;--axis-y:#337A4B;--axis-z:#3A6EA8;
+  --overlay:#4A3A280d;     /* 深色低透明叠加，替代深色主题里的 #ffffff08 */
+  --overlay-2:#4A3A281a;
+  --shadow:0 12px 32px #4A3A2821;
+  /* 猫爪光标：24px 框内图案约 20px（与系统默认箭头相当），水平镜像后顺时针倾 20°，
+     受力点落在爪垫右下缘。热点固定 (20,21)，两种状态一致，按下时不会跳位。 */
+  --paw:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cg transform='translate(12 0) scale(-1 1) translate(-12 0)'%3E%3Cg transform='translate(12 12) rotate(20) scale(.64) translate(-15 -15.4)'%3E%3Cg stroke='%238A6A4E' stroke-width='2.1' stroke-linejoin='round'%3E%3Cellipse cx='7' cy='11' rx='4' ry='5' fill='%23FFFFFF'/%3E%3Cellipse cx='15' cy='8' rx='4' ry='5.4' fill='%23FFFFFF'/%3E%3Cellipse cx='23' cy='10' rx='4' ry='5' fill='%23FFFFFF'/%3E%3Cpath d='M15 15c5.6 0 10 4 10 8.6 0 3-2.3 4.6-5.2 4.2-1.8-.3-3.3-.9-4.8-.9s-3 .6-4.8 .9C7.3 28.2 5 26.6 5 23.6 5 19 9.4 15 15 15z' fill='%23FFFFFF'/%3E%3C/g%3E%3Cg fill='%23F3A79E'%3E%3Cellipse cx='7' cy='11.5' rx='2' ry='2.8'/%3E%3Cellipse cx='15' cy='8.8' rx='2' ry='3'/%3E%3Cellipse cx='23' cy='10.5' rx='2' ry='2.8'/%3E%3Cpath d='M15 17.8c3.5 0 6.3 2.3 6.3 5.1 0 1.7-1.4 2.6-3.1 2.4-1.1-.2-2.2-.5-3.2-.5s-2.1 .3-3.2 .5c-1.7 .2-3.1-.7-3.1-2.4 0-2.8 2.8-5.1 6.3-5.1z'/%3E%3C/g%3E%3C/g%3E%3C/g%3E%3C/svg%3E") 20 21,auto;
+  --paw-active:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cg transform='translate(13 16) scale(1.06 .9) translate(-13 -16)'%3E%3Cg transform='translate(12 0) scale(-1 1) translate(-12 0)'%3E%3Cg transform='translate(12 12) rotate(20) scale(.64) translate(-15 -15.4)'%3E%3Cg stroke='%237E5F44' stroke-width='2.1' stroke-linejoin='round'%3E%3Cellipse cx='7' cy='11' rx='4' ry='5' fill='%23FFFFFF'/%3E%3Cellipse cx='15' cy='8' rx='4' ry='5.4' fill='%23FFFFFF'/%3E%3Cellipse cx='23' cy='10' rx='4' ry='5' fill='%23FFFFFF'/%3E%3Cpath d='M15 15c5.6 0 10 4 10 8.6 0 3-2.3 4.6-5.2 4.2-1.8-.3-3.3-.9-4.8-.9s-3 .6-4.8 .9C7.3 28.2 5 26.6 5 23.6 5 19 9.4 15 15 15z' fill='%23FFFFFF'/%3E%3C/g%3E%3Cg fill='%23FF8FA3'%3E%3Cellipse cx='7' cy='11.5' rx='2' ry='2.8'/%3E%3Cellipse cx='15' cy='8.8' rx='2' ry='3'/%3E%3Cellipse cx='23' cy='10.5' rx='2' ry='2.8'/%3E%3Cpath d='M15 17.8c3.5 0 6.3 2.3 6.3 5.1 0 1.7-1.4 2.6-3.1 2.4-1.1-.2-2.2-.5-3.2-.5s-2.1 .3-3.2 .5c-1.7 .2-3.1-.7-3.1-2.4 0-2.8 2.8-5.1 6.3-5.1z'/%3E%3C/g%3E%3C/g%3E%3C/g%3E%3C/g%3E%3C/svg%3E") 20 21,auto;
+  /* 光标角色。切到系统光标时只改这三个变量，各组件不必各自判断。 */
+  --cursor-base:var(--paw);
+  --cursor-ui:var(--paw);
+  --cursor-active:var(--paw-active);
+  color-scheme:light;color:var(--ink);background:var(--bg);
+}
+html.system-cursor{--cursor-base:auto;--cursor-ui:pointer;--cursor-active:pointer}
+html,body,input,textarea,select{cursor:var(--cursor-base)}
+a,summary,[role=button],button{cursor:var(--cursor-ui)}
+button:active,a:active{cursor:var(--cursor-active)}
