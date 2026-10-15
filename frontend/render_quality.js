@@ -290,10 +290,6 @@ export function installRenderQuality({renderer,scene,camera,controls,sun,hemisph
     scene.traverse(o=>{if(o.isMesh)for(const m of Array.isArray(o.material)?o.material:[o.material])m.needsUpdate=true;});
     renderer.shadowMap.needsUpdate=true;
     applyLighting(true);updateDirection();
-    note.textContent=settings.shadow?'温馨庭院 · 云朵天空与远山 · '+sun.shadow.mapSize.x+' 柔和阴影':'温馨庭院 · 云朵天空与远山 · 关闭投影，适合大型场景编辑';
-    if(level==='fine')note.textContent='自然庭院 · 24 小时昼夜与太阳弧线 · '+sun.shadow.mapSize.x+' 柔和阴影';
-    note.textContent+=level==='light'?' · 关闭立体草':level==='fine'?' · 庭院野草与零星小花（可视范围 / 距离分级）':' · 原有地面';
-    if(level==='fine')note.textContent+=' · PCSS 接触软阴影';
     note.dataset.level=level;
     note.dataset.sunIntensity=String(sun.intensity);note.dataset.moonIntensity=String(moon.intensity);
     note.dataset.ambientIntensity=String(hemisphere.intensity);

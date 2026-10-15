@@ -8,8 +8,13 @@ export function installSceneOverview({list,isVisible,setVisibility,locate,select
   const filters=document.createElement('div');filters.className='scene-visibility-filters';bar.append(filters);
   let filter='all',rows=[],allRows=[],expanded=new Set(),searching=false;
   for(const [key,name] of [['all','全部'],['visible','可见'],['hidden','已隐藏']]){const b=document.createElement('button');b.dataset.visibilityFilter=key;b.onclick=()=>{filter=key;render();};filters.append(b);}
-  const actions=document.createElement('div');actions.className='scene-visibility-actions';bar.append(actions);
-  for(const [name,visible,all] of [['显示筛选结果',true,false],['隐藏筛选结果',false,false],['显示全部',true,true]]){const b=document.createElement('button');b.textContent=name;b.onclick=()=>setVisibility((all?allRows:filtered()).map(r=>r.instance),visible);actions.append(b);}
+  // 批量显示与隐藏收进右侧菜单，让统计和三个入口保持在同一行。
+  const menu=document.createElement('details');menu.className='scene-visibility-menu';
+  const summary=document.createElement('summary');summary.textContent='⋯';summary.title='批量显示与隐藏';summary.setAttribute('aria-label','批量显示与隐藏');menu.append(summary);
+  const actions=document.createElement('div');actions.className='scene-visibility-actions';menu.append(actions);bar.append(menu);
+  for(const [name,visible,all] of [['显示筛选结果',true,false],['隐藏筛选结果',false,false],['显示全部',true,true]]){const b=document.createElement('button');b.textContent=name;b.onclick=()=>{menu.open=false;setVisibility((all?allRows:filtered()).map(r=>r.instance),visible);};actions.append(b);}
+  document.addEventListener('pointerdown',event=>{if(menu.open&&!menu.contains(event.target))menu.open=false;});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&menu.open){menu.open=false;summary.focus();}});
   const filtered=()=>rows.filter(r=>filter==='all'||(filter==='visible')===isVisible(r));
   function eye(instances,visible,name,mixed=false){const b=document.createElement('button');b.className='scene-eye';b.textContent=mixed?'◐':visible?'◉':'○';b.title=(visible?'隐藏':'显示')+name;b.setAttribute('aria-label',b.title);b.setAttribute('aria-pressed',String(visible));b.onclick=e=>{e.stopPropagation();setVisibility(instances,!visible);};return b;}
   function render(){

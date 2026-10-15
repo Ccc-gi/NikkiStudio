@@ -8,7 +8,7 @@
 
 <input id="save" type="file" accept=".json" hidden>
 <dialog id="settingsDialog" class="settings-dialog" aria-labelledby="settingsTitle">
-  <header class="settings-header"><div><h2 id="settingsTitle">设置</h2><p>调整预览画面与编辑体验</p></div><button id="closeSettings" aria-label="关闭设置">✕</button></header>
+  <header class="settings-header"><h2 id="settingsTitle">设置</h2><button id="closeSettings" aria-label="关闭设置">✕</button></header>
   <div class="settings-layout">
     <nav class="settings-tabs" role="tablist" aria-label="设置分类" aria-orientation="vertical">
       <button id="tabVisual" role="tab" aria-selected="true" aria-controls="settingsVisual" data-settings-tab="settingsVisual">画面与环境</button>
@@ -17,8 +17,9 @@
     </nav>
     <div class="settings-content">
       <section id="settingsVisual" role="tabpanel" aria-labelledby="tabVisual">
-        <h3>画面与环境</h3><p class="settings-description">设置即时生效，不会重新加载模型。贴图质量随渲染等级自动切换。</p>
-        <div class="settings-group"><h4>渲染与光照</h4><label for="renderQuality">渲染等级</label><select id="renderQuality" title="切换画面效果，不会重新加载模型"><option value="light">轻量</option><option value="standard" selected>标准</option><option value="fine">精细</option></select><p id="renderQualityNote" class="settings-hint"></p><p id="textureQualityStatus" class="settings-hint" role="status">精细：原始高清 · 标准：预览 · 轻量：低分辨率</p></div>
+        <h3>画面与环境</h3>
+        <div class="settings-group"><h4>渲染与光照</h4><label for="renderQuality">渲染等级</label><select id="renderQuality" title="切换画面效果，不会重新加载模型"><option value="light">轻量</option><option value="standard" selected>标准</option><option value="fine">精细</option></select><!-- 空节点：时间与亮度控件按它插入，诊断数据也存在它的 dataset 上，不要删除。 -->
+        <p id="renderQualityNote" class="settings-hint"></p><p id="textureQualityStatus" class="settings-hint" role="status">精细：原始高清 · 标准：预览 · 轻量：低分辨率</p></div>
         <div class="settings-group"><h4>场景地面</h4><label class="settings-check"><input id="grassGround" type="checkbox" checked><span>显示草地地面<small>精细等级包含立体草团与小花。</small></span></label></div>
         <div class="settings-group"><h4>性能</h4><label class="settings-check"><input id="batchRendering" type="checkbox" checked><span>合并重复物品绘制<small>减少绘制开销，建议保持开启。</small></span></label></div>
       </section>
@@ -38,6 +39,6 @@
       </section>
     </div>
   </div>
-  <footer class="settings-footer"><span>预览设置不会写入游戏存档</span><button id="doneSettings" class="primary">完成</button></footer>
+  <footer class="settings-footer"><button id="doneSettings" class="primary">完成</button></footer>
 </dialog>
 <script type="importmap">{"imports":{"three":"/vendor/build/three.module.js","three/addons/":"/vendor/examples/jsm/"}}</script><script type="module" src="/save_scene.js"></script><script type="module" src="/runtime_status.js"></script></body></html>

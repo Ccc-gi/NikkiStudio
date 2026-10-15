@@ -7,6 +7,8 @@ import {installAppbarMenu} from './appbar_menu.js';
 installAppbarMenu();
 import {installSceneStatus} from './scene_status.js';
 const sceneStatus=installSceneStatus();
+import {installEasterEgg} from './easter_egg.js';
+installEasterEgg();
 import {installGameFiles} from './workspace_game_files.js';
 import {prepareScene} from './scene_prepare.js';
 import {updateDyeManifest,updateMaterialManifest} from './furniture_materials.js';
