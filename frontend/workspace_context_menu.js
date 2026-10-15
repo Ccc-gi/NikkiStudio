@@ -43,7 +43,12 @@ export function installWorkspaceContextMenu({canvas,panel,nodes,selection,pick,s
   canvas.addEventListener('pointerdown',e=>{menu.hidden=true;if(e.button===2){start={id:e.pointerId,x:e.clientX,y:e.clientY};moved=false;}},true);
   canvas.addEventListener('pointermove',e=>{if(start?.id===e.pointerId&&Math.hypot(e.clientX-start.x,e.clientY-start.y)>5)moved=true;},true);
   canvas.addEventListener('pointerup',e=>{if(e.button===2&&start?.id===e.pointerId){open(e);start=null;}},true);
-  canvas.addEventListener('pointercancel',()=>{start=null;menu.hidden=true;});canvas.addEventListener('contextmenu',e=>e.preventDefault());
+  canvas.addEventListener('pointercancel',()=>{start=null;menu.hidden=true;});  // 应用自己用右键开场景菜单，浏览器原生菜单叠在上面既挡视线又容易误点，所以整个工作区统一屏蔽，
+  // 不只是画布。文本框除外——属性面板的数字框和搜索框还要靠原生菜单粘贴剪切。
+  document.addEventListener('contextmenu',event=>{
+    if(event.target.closest?.('input,textarea,[contenteditable]:not([contenteditable="false"])'))return;
+    event.preventDefault();
+  });
   document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target)&&e.target!==canvas)menu.hidden=true;});window.addEventListener('keydown',e=>{if(e.key==='Escape')menu.hidden=true;});window.addEventListener('blur',()=>{menu.hidden=true;start=null;});
   return{applyVisibility,prepareMaterials,restoreMaterials,reset,loadVisibility,setVisibility,isHidden:instance=>hidden.has(String(instance))};
 }
