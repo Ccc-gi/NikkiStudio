@@ -1,7 +1,7 @@
 // 彩蛋：上上下下左右左右 B A。命中后右下角弹出一只大喵吃五花肉。
 //
 // 进食由输入决定：不碰方向键，它自己把一整块肉吃完就走；期间按方向键会立刻多咬一口并延后离开，
-// 于是一直按就一直吃，咬空了自动换新的一块。
+// 于是一直按就一直吃，咬空了自动换新的一块。每次重新召唤都比上次大一圈，见 GROWTH_STEP。
 //
 // 序列只用方向键和 b/a，且不带修饰键，所以不会和 W A S D 导航、M/R/V、Ctrl+S、Shift 步进冲突；
 // 输入框里不计数，避免打字误触发；全程不 preventDefault，按什么都不可能影响别的快捷键。
@@ -15,6 +15,10 @@ const GRIN_MS=780;         // 收工前先呲牙笑这么久
 const LEAVE_MS=700;
 const FIRST_BITE_MS=420;   // 等弹出动画走完
 const MEAT_STEPS=[1,.78,.5,0];   // 每咬一口剩下的份量，见底换新的一块
+// 每召唤一次就比上次大一点，长够 GROWTH_MAX 次就不再长。只活在本次页面里，
+// 刷新即归零——否则发现彩蛋的人会把右下角永久撑成一只巨猫。
+const GROWTH_STEP=.09;
+const GROWTH_MAX=10;
 const MARKUP=`
 <g class="kc-all">
   <g class="kc-head">
@@ -54,6 +58,7 @@ const MARKUP=`
 
 let session=null;
 let progress=0;
+let summons=0;
 
 export function installEasterEgg(){
   const typing=target=>target instanceof Element&&target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
@@ -71,13 +76,18 @@ export function installEasterEgg(){
 function begin(){
   if(session)return;
   document.querySelector('.konami-cat')?.remove();
+  const wrapper=document.createElement('div');
+  wrapper.className='konami-cat';
+  wrapper.setAttribute('aria-hidden','true');
+  wrapper.style.setProperty('--konami-scale',String(1+GROWTH_STEP*Math.min(summons,GROWTH_MAX)));
+  summons++;
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-  svg.setAttribute('class','konami-cat');
+  svg.setAttribute('class','konami-cat-body');
   svg.setAttribute('viewBox','0 0 130 104');
-  svg.setAttribute('aria-hidden','true');
   svg.innerHTML=MARKUP;
-  document.body.append(svg);
-  session={el:svg,meat:svg.querySelector('.kc-meat'),head:svg.querySelector('.kc-head'),mouth:svg.querySelector('.kc-mouth'),bites:-1,last:0,lastInput:0};
+  wrapper.append(svg);
+  document.body.append(wrapper);
+  session={el:wrapper,meat:svg.querySelector('.kc-meat'),head:svg.querySelector('.kc-head'),mouth:svg.querySelector('.kc-mouth'),bites:-1,last:0,lastInput:0};
   session.first=setTimeout(()=>{
     if(!session)return;
     bite();
