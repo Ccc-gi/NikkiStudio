@@ -1,4 +1,4 @@
-// Transient notices in the top-right corner. `info`/`success` fade on their own;
+// Transient notices along the bottom edge, centred. `info`/`success` fade on their own;
 // `warn`/`error` stay until the condition clears or the user closes them, because
 // missing a "the game changed, re-validate" notice silently produces wrong exports.
 const LEVEL_CLASS = {info: 'notice-info', success: 'notice-success', warn: 'notice-warn', error: 'notice-error'};

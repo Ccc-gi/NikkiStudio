@@ -17,7 +17,7 @@ export function projectedBounds(node,camera,width,height){
   return minX===Infinity?null:{minX,minY,maxX,maxY};
 }
 
-export function installWorkspaceSelection({canvas,panel,camera,controls,gizmo,nodes,onSelect,onClick}){
+export function installWorkspaceSelection({canvas,panel,camera,controls,gizmo,nodes,onSelect,onClick,pickAt,onHover}){
   controls.mouseButtons.LEFT=null;controls.mouseButtons.RIGHT=T.MOUSE.PAN;controls.mouseButtons.MIDDLE=T.MOUSE.PAN;
   const box=document.createElement('div');box.className='selection-marquee';box.hidden=true;panel.append(box);
   const label=document.createElement('span');box.append(label);
@@ -32,5 +32,10 @@ export function installWorkspaceSelection({canvas,panel,camera,controls,gizmo,no
   });
   canvas.addEventListener('pointermove',e=>{if(!drag||drag.id!==e.pointerId)return;const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;if(Math.hypot(x-drag.x,y-drag.y)<5&&!drag.moved)return;drag.moved=true;box.hidden=false;const crossing=x<drag.x;box.classList.toggle('crossing',crossing);box.style.left=Math.min(x,drag.x)+'px';box.style.top=Math.min(y,drag.y)+'px';box.style.width=Math.abs(x-drag.x)+'px';box.style.height=Math.abs(y-drag.y)+'px';label.textContent=crossing?'相交选择':'完整包含';});
   canvas.addEventListener('pointerup',e=>{if(!drag||drag.id!==e.pointerId)return;const d=drag;drag=null;box.hidden=true;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);if(!d.moved){onClick(e,d.add);return;}const r=canvas.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,rect={minX:Math.min(x,d.x),maxX:Math.max(x,d.x),minY:Math.min(y,d.y),maxY:Math.max(y,d.y)};const found=nodes().filter(n=>n.visible&&rectangleMatches(rect,projectedBounds(n,camera,r.width,r.height),x<d.x));onSelect(found,d.add,x<d.x);});
-  const cancel=()=>{drag=null;box.hidden=true;};canvas.addEventListener('pointercancel',cancel);window.addEventListener('blur',cancel);window.addEventListener('keydown',e=>{if(e.key==='Escape')cancel();});
+  // 悬停高亮：按 rAF 节流，拖动、放置和框选期间不参与，指针离开画布即清除。
+  let hoverQueued=false,hoverEvent=null;
+  const hoverBlocked=()=>Boolean(drag||gizmo.dragging||gizmo.axis||['preview','rotate','loading'].includes(panel.dataset.placement));
+  canvas.addEventListener('pointermove',event=>{hoverEvent=event;if(hoverQueued)return;hoverQueued=true;requestAnimationFrame(()=>{hoverQueued=false;onHover(hoverEvent&&!hoverBlocked()?pickAt(hoverEvent):null);});});
+  canvas.addEventListener('pointerleave',()=>onHover(null));
+  const cancel=()=>{drag=null;box.hidden=true;onHover(null);};canvas.addEventListener('pointercancel',cancel);window.addEventListener('blur',cancel);window.addEventListener('keydown',e=>{if(e.key==='Escape')cancel();});
 }

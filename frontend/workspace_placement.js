@@ -111,7 +111,7 @@ export function installWorkspacePlacement({scene,camera,canvas,panel,status,pick
     }
     (rotation.mode==='translate'?onMoveEnd:onRotationEnd)();rotation=null;pressed=false;rotationUi.hidden=true;refreshBounds();
     canvas.style.cursor='crosshair';panel.dataset.placement='preview';
-    hint.textContent='抓取中 · M 移动 · R 旋转 · Alt 对齐中心与水平朝向（单件） · Shift 暂停吸附 · 左键放置 · 右键取消';status.textContent=hint.textContent;position();
+    hint.textContent='抓取中 · M 移动 · R 旋转 · Alt 对齐中心与水平朝向（单件） · Shift 暂停吸附 · 左键放置 · 右键取消';status.textContent='';position();
   }
   function toggleTransform(mode){
     if(!session||session.array)return;
@@ -122,7 +122,7 @@ export function installWorkspacePlacement({scene,camera,canvas,panel,status,pick
     const moving=mode==='translate';panel.dataset.placement=moving?'move':'rotate';rotationUi.hidden=false;rotationLabel.textContent=moving?'三轴移动':'三轴旋转';canvas.style.cursor='';
     accept.textContent=moving?'确认移动 · M':'确认旋转 · R';reject.textContent=moving?'取消移动':'取消旋转';
     (moving?onMoveStart:onRotationStart)(session.nodes);
-    hint.textContent=moving?'移动中 · 拖动箭头或平面 · Alt 精细调整 · M 确认 · 右键取消本次移动':'旋转中 · 拖动旋转环 · Alt 精细调整 · R 确认 · 右键取消本次旋转';status.textContent=hint.textContent;
+    hint.textContent=moving?'移动中 · 拖动箭头或平面 · Alt 精细调整 · M 确认 · 右键取消本次移动':'旋转中 · 拖动旋转环 · Alt 精细调整 · R 确认 · 右键取消本次旋转';status.textContent='';
   }
   let session=null,lastPointer=null,generation=0,pressed=false,suppressContext=false;
   function stop(cancelled){
@@ -159,7 +159,7 @@ export function installWorkspacePlacement({scene,camera,canvas,panel,status,pick
       panel.dataset.arrayCopies=String(layout.offsets.length);panel.dataset.arrayStep=String(layout.step);
       if(array.handle)panel.dataset.arrayLayout=JSON.stringify({axes:layout.axes,counts:layout.counts,steps:layout.steps,delta:layout.localDelta});
       hint.textContent=layout.error??array.hintText?.(layout)??`局部阵列 · 新增 ${layout.offsets.length} 组 / ${session.nodes.length} 件 · ${array.handle?'拖单轴或平面手柄 · 松开生成':array.settings?'调整 XYZ 数量和间距 · 确认生成':'左键拖动后松开放置，也可单击确认'} · 右键取消`;
-      array.onPreview?.(layout,session.nodes.length);status.textContent=hint.textContent;
+      array.onPreview?.(layout,session.nodes.length);status.textContent='';
       return;
     }
     const rect=canvas.getBoundingClientRect();pointer.set((lastPointer.x-rect.left)/rect.width*2-1,-(lastPointer.y-rect.top)/rect.height*2+1);ray.setFromCamera(pointer,camera);
@@ -202,8 +202,8 @@ export function installWorkspacePlacement({scene,camera,canvas,panel,status,pick
         const materials=new Map();for(const [object,material] of originals){const preview=Array.isArray(object.material)?object.material:[object.material],actual=Array.isArray(material)?material:[material];preview.forEach((m,i)=>materials.set(m,actual[i]));}
         nodes.forEach(n=>root.remove(n));session.nodes=[];session.array={...arrayOptions,templates:nodes,groups:[],materials,anchor:anchor.clone(),plane:new T.Plane(new T.Vector3(0,1,0),-anchor.y)};
       }
-      hint.textContent='拿着 '+label+' · M 移动 · R 旋转 · Alt 对齐中心与水平朝向（单件） · Shift 暂停吸附 · 左键放置 · 右键取消';hint.hidden=false;canvas.style.cursor='crosshair';panel.dataset.placement='preview';status.textContent=hint.textContent;
-      if(session.array){hint.textContent='阵列复制 · 拖动鼠标拉出排列 · 保持原高度 · 右键取消';status.textContent=hint.textContent;}position();
+      hint.textContent='拿着 '+label+' · M 移动 · R 旋转 · Alt 对齐中心与水平朝向（单件） · Shift 暂停吸附 · 左键放置 · 右键取消';hint.hidden=false;canvas.style.cursor='crosshair';panel.dataset.placement='preview';status.textContent='';
+      if(session.array){hint.textContent='阵列复制 · 拖动鼠标拉出排列 · 保持原高度 · 右键取消';status.textContent='';}position();
     }catch(error){if(token===generation){stop(true);status.textContent='拿起物品失败：'+error.message;}}
   }
   canvas.addEventListener('pointermove',e=>{lastPointer={x:e.clientX,y:e.clientY,shift:e.shiftKey,alt:e.altKey};if(session){session.justMoved=false;position();}},{capture:true});

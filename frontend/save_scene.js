@@ -5,6 +5,8 @@ import {installCursorStyle} from './cursor_style.js';
 installCursorStyle();
 import {installAppbarMenu} from './appbar_menu.js';
 installAppbarMenu();
+import {installSceneStatus} from './scene_status.js';
+const sceneStatus=installSceneStatus();
 import {installGameFiles} from './workspace_game_files.js';
 import {prepareScene} from './scene_prepare.js';
 import {updateDyeManifest,updateMaterialManifest} from './furniture_materials.js';
@@ -146,7 +148,7 @@ async function rebuild(preserveView=false){
   renderWorkspace();
   updateSceneTextureQuality();
   summary.textContent+=` · 染色已匹配 ${dyeRequested.length-dyePending} / 待补 ${dyePending}`;
-  status.textContent=`共 ${entries.length} 件物品 · 真实模型 ${matched} · 占位 ${missing} · 模型加载失败 ${failed} · 特殊物品待校准 ${partial} · 多轴旋转 ${entries.filter(isTilted).length}。模型和材质从当前游戏按需加载。存档染色已接入；缺少的分区配置或贴图保留默认外观，蓝图运行时姿态仍待校准。`;
+  sceneStatus.update({total:entries.length,matched,missing,failed,partial,tilted:entries.filter(isTilted).length});status.textContent='';
 }
 function refreshBatches(){selectionHighlighter.clear();batches.clear();viewMenu.restoreMaterials();setClayMode(group,document.querySelector('#clay').checked);viewMenu.prepareMaterials();viewMenu.applyVisibility();renderQuality.prepare(group);grassGround.invalidate(group);if(document.querySelector('#batchRendering').checked)batches.rebuild(group);else batches.clear();updateOutline();}
 document.querySelector('#batchRendering').onchange=()=>{refreshBatches();applyClay();};
@@ -228,8 +230,8 @@ import {TransformControls} from 'three/addons/controls/TransformControls.js';
 let saveDocument=null,selectedIndex=-1,libraryMode=false,editorMode='select',dragStart=null,suppressPickUntil=0,presetPanel=null;
 const selectionHighlighter=new SelectionHighlight(()=>renderQuality.level);
 const sceneRows=new Map();
-const selectedNodes=new Set(),selectionOutlines=new T.Group();scene.add(selectionOutlines);
-renderQuality.onLevelChange(()=>{selectionHighlighter.apply(selectedNodes,batches);updateSceneTextureQuality();});
+const selectedNodes=new Set(),hoveredNodes=new Set(),selectionOutlines=new T.Group();scene.add(selectionOutlines);
+renderQuality.onLevelChange(()=>{selectionHighlighter.apply(selectedNodes,hoveredNodes,batches);updateSceneTextureQuality();});
 const $=id=>document.getElementById(id);
 const dyePanel=installDyePanel({host:$('dyePanel'),configFor:furnitureDyeConfig,onChange:changeSelectedDye});
 const gizmo=new TransformControls(camera,r.domElement);scene.add(gizmo.getHelper());gizmo.setSize(.85);installTransformPrecision(gizmo,r.domElement,panel,()=>Math.min(...[...selectedNodes].map(node=>node.position.y)));
@@ -253,13 +255,18 @@ function syncLegalHandleVisibility(workingQuaternion,nodes=selectedNodes){
   panel.dataset.legalHandleAxes=['X','Y','Z'].filter(axis=>gizmo['show'+axis]).join('');
 }
 function attachTransformHandle(){const workingQuaternion=selectedNode?legalRotationFrame():null;syncLegalHandleVisibility(workingQuaternion);if(buildLegality.enabled&&(!buildLegality.available&&['scale','rotate'].includes(editorMode))){gizmo.detach();return;}if(buildLegality.enabled&&editorMode==='scale'&&selectedNode){const c=buildLegality.constraint(selectedNode.userData.id);if(c&&c.scaleRange[0]===c.scaleRange[1]){gizmo.detach();return;}}if(!selectedNode||editorMode==='select'||(selectedNodes.size>1&&editorMode==='scale')){gizmo.detach();return;}if(selectedNodes.size>1){gizmo.attach(multiTransformFrame.attach(selectedNodes,workingQuaternion));panel.dataset.transformFrame='selection-center';}else{gizmo.attach(editorMode==='scale'?selectedNode:transformFrame.attach(selectedNode,workingQuaternion));panel.dataset.transformFrame=editorMode==='scale'?'actor':'calibrated-model';}}
-const outline=new T.Box3Helper(new T.Box3(),0x78dfc6);scene.add(outline);outline.visible=false;
+const outline=new T.Box3Helper(new T.Box3(),0xe8913a);scene.add(outline);outline.visible=false;
 function openDocument(raw,name){const nextDocument=new SaveDocument(raw,name),nextEntries=parse(nextDocument.data);run++;modelQueue.cancelPending();materialQueue.cancelPending();prepared.clear();placement.cancel();duplicateNodes.clear();viewMenu.reset(true);saveDocument=nextDocument;viewMenu.loadVisibility(name+':'+saveDocument.rows.map(row=>row.instanceID??row.InstanceID).join(','));entries=nextEntries;selectedIndex=-1;selectedNodes.clear();selectionHighlighter.clear();clearSelectionOutlines();gizmo.detach();outline.visible=false;}
 function clearSelectionOutlines(){for(const child of selectionOutlines.children){child.geometry.dispose();child.material.dispose();}selectionOutlines.clear();}
 function selectEditorNode(node,add=false,navigate=false){if(placement.active)placement.cancel();if(gizmo.dragging||performance.now()<suppressPickUntil)return;applySelection(node?[node]:[],add);if(navigate&&node)revealSceneSelection();}
-function applySelection(nodes,add=false,crossing=false){const started=performance.now();if(!add)selectedNodes.clear();for(const node of nodes)selectedNodes.add(node);selectedNode=[...selectedNodes].at(-1)??null;selectedIndex=selectedNode?group.children.indexOf(selectedNode):-1;if($('isolate').checked)restoreVisibility();attachTransformHandle();renderProperties();updateListSelection();updateOutline();panel.dataset.selectionCpuMs=(performance.now()-started).toFixed(2);panel.dataset.selectionCount=String(selectedNodes.size);status.textContent=selectedNodes.size?`已选择 ${selectedNodes.size} 件物品${nodes.length>1?' · '+(crossing?'相交框选':'包含框选'):''} · 可移动、旋转、复制、删除或聚焦`:'未选择物品';}
-function updateOutline(){outline.visible=false;clearSelectionOutlines();selectionHighlighter.apply(selectedNodes,batches);panel.dataset.selectionHighlight='model';}
-installWorkspaceSelection({canvas:r.domElement,panel,camera,controls,gizmo,nodes:()=>group.children,onSelect:(nodes,add,crossing)=>{applySelection(nodes,add,crossing);if(nodes.length)revealSceneSelection();},onClick:(e,add)=>{if(performance.now()<suppressPickUntil)return;const b=r.domElement.getBoundingClientRect();mouse.set((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1);ray.setFromCamera(mouse,camera);const hit=ray.intersectObjects([...group.children,...batches.pool.children],true).find(h=>batches.owner(h,group));if(!hit)setMode('select');selectEditorNode(hit?batches.owner(hit,group):null,add,true);}});
+// 选中提示按当前变换模式给对应操作说明；选择模式回落到通用的可操作项。
+const MODE_HINT={translate:'拖动手柄移动 · Shift 步进 10cm · Alt 精细',rotate:'拖动圆环旋转 · Shift 步进 15° · Alt 精细',scale:'拖动手柄缩放 · Shift 步进 0.1 · Alt 精细'};
+function selectionStatus(note=''){if(!selectedNodes.size)return '未选择物品';return `已选择 ${selectedNodes.size} 件物品${note?' · '+note:''} · ${MODE_HINT[editorMode]??'可移动、旋转、复制、删除或聚焦'}`;}
+function applySelection(nodes,add=false,crossing=false){const started=performance.now();hoveredNodes.clear();if(!add)selectedNodes.clear();for(const node of nodes)selectedNodes.add(node);selectedNode=[...selectedNodes].at(-1)??null;selectedIndex=selectedNode?group.children.indexOf(selectedNode):-1;if($('isolate').checked)restoreVisibility();attachTransformHandle();renderProperties();updateListSelection();updateOutline();panel.dataset.selectionCpuMs=(performance.now()-started).toFixed(2);panel.dataset.selectionCount=String(selectedNodes.size);status.textContent=selectionStatus(nodes.length>1?(crossing?'相交框选':'包含框选'):'');}
+function updateOutline(){outline.visible=false;clearSelectionOutlines();selectionHighlighter.apply(selectedNodes,hoveredNodes,batches);panel.dataset.selectionHighlight='model';}
+const pickAt=e=>{const b=r.domElement.getBoundingClientRect();mouse.set((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1);ray.setFromCamera(mouse,camera);const hit=ray.intersectObjects([...group.children,...batches.pool.children],true).find(h=>batches.owner(h,group));return hit?batches.owner(hit,group):null;};
+function setHovered(node){if(node&&selectedNodes.has(node))node=null;if(([...hoveredNodes][0]??null)===node)return;hoveredNodes.clear();if(node)hoveredNodes.add(node);updateOutline();}
+installWorkspaceSelection({canvas:r.domElement,panel,camera,controls,gizmo,nodes:()=>group.children,pickAt,onHover:setHovered,onSelect:(nodes,add,crossing)=>{applySelection(nodes,add,crossing);if(nodes.length)revealSceneSelection();},onClick:(e,add)=>{if(performance.now()<suppressPickUntil)return;const node=pickAt(e);if(!node)setMode('select');selectEditorNode(node,add,true);}});
 initWorkspacePanels();
 const viewMenu=installWorkspaceContextMenu({canvas:r.domElement,panel,nodes:()=>group.children,selection:()=>selectedNodes,catalog:()=>furniture,refresh:()=>{refreshBatches();applyClay();},onVisibility:()=>renderList(),syncVisibility:()=>{viewMenu.applyVisibility();batches.sync(group);updateOutline();},onChange:text=>status.textContent=text,editAction:action=>{if(['translate','rotate','scale'].includes(action))setMode(action);else document.getElementById(action).click();},canEdit:action=>readyRun===run&&!gizmo.dragging&&selectedNodes.size>0&&(action!=='scale'||selectedNodes.size===1),select:(node,add)=>selectEditorNode(node,add,true),pick:e=>{const b=r.domElement.getBoundingClientRect();mouse.set((e.clientX-b.left)/b.width*2-1,-(e.clientY-b.top)/b.height*2+1);ray.setFromCamera(mouse,camera);const hit=ray.intersectObjects([...group.children,...batches.pool.children],true).find(h=>batches.owner(h,group));return hit?batches.owner(hit,group):null;}});
 function placementSurface(ray){return ray.intersectObjects([...group.children,...batches.pool.children],true).find(h=>{
@@ -458,11 +465,18 @@ async function addFurniture(id){if(!saveDocument||readyRun!==run)return;gizmo.de
   setNodeEntry(node,a);entries.push(a);group.add(node);duplicateNodes.set(String(a.instance),node);renderQuality.prepare(node);finishDuplicateUpdate([node],started);status.textContent='已放置 '+(furniture[id]?.name??'物品');
 });}
 function focusEditor(){if(selectedNodes.size>1){const b=new T.Box3();for(const n of selectedNodes)b.union(new T.Box3().setFromObject(n));const c=b.getCenter(new T.Vector3()),d=Math.max(1,b.getSize(new T.Vector3()).length()*1.3);controls.target.copy(c);camera.position.copy(c).add(new T.Vector3(.8,.6,1).normalize().multiplyScalar(d));controls.update();return;}if(!selectedNode)return;const b=new T.Box3().setFromObject(selectedNode),c=b.getCenter(new T.Vector3()),d=Math.max(1,b.getSize(new T.Vector3()).length()*1.6);controls.target.copy(c);camera.position.copy(c).add(new T.Vector3(.8,.6,1).normalize().multiplyScalar(d));camera.far=Math.max(5000,d*12);camera.updateProjectionMatrix();controls.update();}
-function setMode(mode){if(placement.active)placement.cancel();editorMode=mode;document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));if(mode==='select')gizmo.detach();else{gizmo.setMode(mode);attachTransformHandle();}r.domElement.focus();}
+function setMode(mode){if(placement.active)placement.cancel();editorMode=mode;document.querySelectorAll('[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));if(mode==='select')gizmo.detach();else{gizmo.setMode(mode);attachTransformHandle();}r.domElement.focus();status.textContent=selectionStatus();}
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
 gizmo.setSpace($('space').value);
 $('space').onchange=e=>{if(placement.active)placement.cancel();gizmo.setSpace(e.target.value);attachTransformHandle();};
-$('snap').onchange=e=>{gizmo.setTranslationSnap(e.target.checked?.1:null);gizmo.setRotationSnap(e.target.checked?T.MathUtils.degToRad(15):null);gizmo.setScaleSnap(e.target.checked?.1:null);};
+// 按住 Shift 拖手柄时走步长：移动 10cm、旋转 15°、缩放 0.1；松开即恢复连续。
+// 只在拖动期间生效——阵列放置进出时会还原进入前的 translationSnap，靠每次拖动重新判定纠正。
+let shiftHeld=false;
+const stepSnap=()=>{const on=shiftHeld&&gizmo.dragging;gizmo.setTranslationSnap(on?.1:null);gizmo.setRotationSnap(on?T.MathUtils.degToRad(15):null);gizmo.setScaleSnap(on?.1:null);};
+window.addEventListener('keydown',e=>{if(e.key==='Shift'){shiftHeld=true;stepSnap();}});
+window.addEventListener('keyup',e=>{if(e.key==='Shift'){shiftHeld=false;stepSnap();}});
+window.addEventListener('blur',()=>{shiftHeld=false;stepSnap();});
+gizmo.addEventListener('dragging-changed',stepSnap);
 function readNodeTransform(node){const q=node.quaternion,ue=new T.Quaternion(-q.x,-q.z,-q.y,q.w),m=new T.Matrix4().makeRotationFromQuaternion(ue).elements;const pitch=Math.asin(T.MathUtils.clamp(m[2],-1,1));let yaw,roll;if(Math.abs(Math.cos(pitch))>1e-7){yaw=Math.atan2(m[1],m[0]);roll=Math.atan2(-m[6],m[10]);}else{yaw=Math.atan2(-m[4],m[5]);roll=0;}return{position:{x:node.position.x*100,y:node.position.z*100,z:node.position.y*100},rotation:{x:T.MathUtils.radToDeg(pitch),y:T.MathUtils.radToDeg(yaw),z:T.MathUtils.radToDeg(roll)},scale:{x:node.scale.x,y:node.scale.z,z:node.scale.y}};}
 const buildLegality=installBuildLegality({onChange:()=>{if(gizmo.dragging)gizmo.reset();if(grabRotation)attachGrabRotation();else attachTransformHandle();renderProperties();}});
 function enforceDragLegality(){
