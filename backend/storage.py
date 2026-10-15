@@ -31,11 +31,16 @@ def write_json(path, value):
 
 
 class Storage:
-    def __init__(self, root=None):
+    def __init__(self, root=None, cache_root=None):
+        custom = root is not None or bool(os.environ.get('NIKKI_STUDIO_DATA'))
         self.root = Path(root or os.environ.get('NIKKI_STUDIO_DATA') or
                          Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'NikkiStudio').resolve()
         self.private = self.root / 'private'
-        self.cache = self.root / 'cache'
+        self.cache = Path(cache_root or (self.root / 'cache' if custom else
+                          Path(__file__).resolve().parents[1] / 'local/cache')).absolute()
+        if self.cache.is_symlink() or self.cache.is_junction():
+            raise ValueError('缓存目录不能是链接目录')
+        self.cache = self.cache.resolve()
         self.private.mkdir(parents=True, exist_ok=True)
         self.cache.mkdir(parents=True, exist_ok=True)
 

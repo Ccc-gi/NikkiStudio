@@ -29,7 +29,10 @@ if session:
 else:
     data = None
 args = [str(root / '.venv/Scripts/python.exe'), '-X', 'utf8', str(root / 'launch.py'), '--no-browser', '--port', '8769']
-if data:
+import os
+default_data = Path(os.environ.get('NIKKI_STUDIO_DATA') or
+                    Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'NikkiStudio').resolve()
+if data and Path(data).resolve() != default_data:
     args += ['--data-dir', data]
 log = root / 'test-results/source-preview.log'
 log.parent.mkdir(exist_ok=True)

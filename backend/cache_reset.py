@@ -11,10 +11,16 @@ import urllib.request
 from pathlib import Path
 
 
-def reset_resources(storage, ports=(8768, 8769)):
+def stop_services(storage, ports=(8768, 8769)):
     if os.name != 'nt':
         raise RuntimeError('Cache reset currently requires Windows process checks')
     stopping = set()
+    registered = []
+    for path in (storage.root / 'service-registry').glob('*.json'):
+        port = json.loads(path.read_text(encoding='utf-8')).get('port')
+        if isinstance(port, int) and 1 <= port <= 65535:
+            registered.append(port)
+    ports = tuple(dict.fromkeys((*ports, *registered)))
     for port in ports:
         base = f'http://127.0.0.1:{port}'
         try:
@@ -55,8 +61,13 @@ def reset_resources(storage, ports=(8768, 8769)):
         if time.monotonic() >= deadline:
             raise RuntimeError('资源解析器仍在转换，缓存尚未清除。请等转换结束后重试。')
         time.sleep(1)
+def reset_resources(storage, ports=(8768, 8769)):
+    stop_services(storage, ports)
+    from backend.cache_management import checked_tree, clear_external
+    checked_tree(storage.cache)
+    clear_external(storage)
     target = storage.cache
-    if target.is_symlink() or target.is_junction() or target.resolve() != storage.root / 'cache':
+    if target.is_symlink() or target.is_junction() or target.resolve() != storage.cache:
         raise RuntimeError('Unsafe cache directory')
     # Check every descendant before recursively removing anything.
     files = list(target.rglob('*'))

@@ -5,6 +5,7 @@ import mimetypes
 import secrets
 import threading
 import time
+import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -117,7 +118,7 @@ class Application:
                 'archives': self.runtime.report if self.runtime else [],
                 'performance': dict(self.runtime.metrics) if self.runtime else {},
                 'scene': getattr(self.runtime, 'scene_progress', None),
-                'dataDirectory': str(self.storage.root)}
+                'dataDirectory': str(self.storage.root), 'cacheDirectory': str(self.storage.cache)}
 
 
 def handler_for(app):
@@ -135,8 +136,8 @@ def handler_for(app):
             self.send_response(status)
             self.send_header('Content-Type', content)
             self.send_header('Content-Length', str(len(body)))
-            immutable = status == 200 and urlsplit(self.path).path.startswith(('/asset/', '/cached-asset/', '/api/texture-png/', '/api/icon/', '/api/preset-preview/'))
-            self.send_header('Cache-Control', 'private, max-age=31536000, immutable' if immutable else 'no-store')
+            # The managed disk cache is authoritative; avoid unmanaged browser duplicates.
+            self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('Referrer-Policy', 'no-referrer')
             self.end_headers()
@@ -155,6 +156,9 @@ def handler_for(app):
                     return self.send({'paths': find_games()})
                 if path == '/api/status':
                     return self.send(app.status(force=urlsplit(self.path).query != 'fast=1'))
+                if path == '/api/cache':
+                    from backend.cache_management import inventory
+                    return self.send(inventory(app.storage))
                 if path == '/api/scene-result':
                     return self.send({'id': app.scene_id, 'running': app.scene_lock.locked(), 'result': app.scene_result,
                                       'geometry': getattr(app.runtime, 'prepared_geometry', None)})
@@ -299,6 +303,22 @@ def handler_for(app):
                     raise ValueError('请求过大或为空')
                 values = json.loads(self.rfile.read(length))
                 path = urlsplit(self.path).path
+                if path == '/api/cache/browser':
+                    self.send_response(200)
+                    self.send_header('Clear-Site-Data', '"cache", "storage"' if values.get('settings') is True else '"cache"')
+                    self.send_header('Content-Length', '2')
+                    self.send_header('Cache-Control', 'no-store')
+                    self.end_headers()
+                    self.wfile.write(b'{}')
+                    return
+                if path == '/api/cache/old':
+                    from backend.cache_management import clear_old
+                    if not app.job_lock.acquire(blocking=False):
+                        raise ValueError('资源校验中，请稍后清理')
+                    try:
+                        return self.send(clear_old(app.storage))
+                    finally:
+                        app.job_lock.release()
                 if path == '/api/configure':
                     app.configure(values)
                     return self.send({'started': True}, status=202)
@@ -384,6 +404,8 @@ def serve(port=8768, data_dir=None, open_browser=False, browser_path='/'):
         raise RuntimeError('本地端口已被其他程序或数据目录占用，请使用 --port 指定其他端口') from None
     if app.storage.config():
         app.start()
+    registration = app.storage.root / 'service-registry' / (str(server.server_port) + '.json')
+    write_json(registration, {'port': server.server_port, 'pid': os.getpid()})
     url = f'http://127.0.0.1:{server.server_port}'
     import sys
     if sys.stdout:
@@ -397,3 +419,4 @@ def serve(port=8768, data_dir=None, open_browser=False, browser_path='/'):
         server.server_close()
         if app.runtime and app.runtime.worker:
             app.runtime.worker.close()
+        registration.unlink(missing_ok=True)

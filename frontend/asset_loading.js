@@ -19,29 +19,18 @@ export const assetManifest = Promise.all([
   fetch('/asset_versions.json',{cache:'no-store'}).then(r=>r.ok?r.json():{}).catch(()=>({})),
   fetch('/texture_lod_manifest.json',{cache:'no-store'}).then(r=>r.ok?r.json():{}).catch(()=>({}))
 ]).then(([models,textures])=>({models,textures}));
-let persistent;
-async function storage() {
-  if (!persistent) persistent = (async()=>{
-    try {const c=await caches.open('nikki-furniture-assets-v1'); loadingMetrics.cacheState='可用'; return c;}
-    catch {loadingMetrics.cacheState='不可用，使用浏览器缓存'; return null;}
-  })();
-  return persistent;
-}
 export async function assetResponse(url, version) {
   const request = new Request(version ? url+(url.includes('?')?'&':'?')+'v='+encodeURIComponent(version) : url);
   if(url.startsWith('/asset/')||url.startsWith('/cached-asset/')||url.startsWith('/api/texture-png/')){
-    const response=await fetch(request,{cache:'force-cache'});
+    const response=await fetch(request,{cache:'no-store'});
     if(!response.ok)throw new Error('资源请求失败 '+response.status+' '+url);
     loadingMetrics.downloads++;loadingMetrics.bytes+=Number(response.headers.get('content-length')||0);
-    loadingMetrics.cacheState='版本化 HTTP 缓存';return response;
+    loadingMetrics.cacheState='工程磁盘缓存';return response;
   }
-  const c = await storage();
-  if(c){const hit=await c.match(request).catch(()=>null);if(hit){loadingMetrics.cacheHits++;return hit;}}
-  const response = await fetch(request);
+  const response = await fetch(request,{cache:'no-store'});
   if(!response.ok)throw new Error('资源请求失败 '+response.status+' '+url);
   loadingMetrics.downloads++; loadingMetrics.bytes+=Number(response.headers.get('content-length')||0);
-  // Quota/disabled storage must never prevent rendering. Versions invalidate changed exports.
-  if(c)c.put(request,response.clone()).catch(()=>{loadingMetrics.cacheState='空间不足，使用浏览器缓存';});
+  loadingMetrics.cacheState='工程磁盘缓存';
   return response;
 }
 export async function modelBuffer(url) {

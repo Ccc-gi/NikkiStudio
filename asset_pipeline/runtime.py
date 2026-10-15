@@ -9,6 +9,7 @@ import tempfile
 import threading
 import queue
 import time
+from contextlib import contextmanager
 from concurrent.futures import Future
 from pathlib import Path
 from backend.config import load_keys, usmap_header
@@ -223,7 +224,8 @@ class Runtime:
             with self._worker_guard:
                 if self.worker is None:
                     from asset_pipeline.worker import ParserWorker
-                    self.worker = ParserWorker(self.config['parserWorker'], self.config)
+                    self.worker = ParserWorker(self.config['parserWorker'], self.config,
+                                               self.storage.cache / 'parser-temp')
                     self.metrics['exportProcesses'] += 1
                     self.metrics['workerMountSeconds'] = self.worker.info['seconds']
             result = self.worker.export(sorted(set(package_path(p) for p in packages)), output, fmt)
@@ -283,7 +285,10 @@ class Runtime:
                     self.progress('按需转换 ' + str(len(batch)) + ' 项 ' + fmt)
                     try:
                         self.metrics['exportProcesses'] += 1
-                        result = subprocess.run(command, capture_output=True, timeout=360,
+                        temp_directory = self.storage.cache / 'parser-temp'
+                        temp_directory.mkdir(exist_ok=True)
+                        env = {**os.environ, 'TEMP': str(temp_directory), 'TMP': str(temp_directory)}
+                        result = subprocess.run(command, capture_output=True, timeout=360, env=env,
                                                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
                     except subprocess.TimeoutExpired:
                         raise ValueError('资源转换超时，旧缓存仍保留') from None
@@ -291,18 +296,29 @@ class Runtime:
                         # Child stdout/stderr can echo keys; never persist them verbatim.
                         raise ValueError('解析器转换失败，退出码 ' + str(result.returncode))
 
+    @contextmanager
     def staging_directory(self, rows):
         """Keep temporary links on the game volume even when the cache lives elsewhere."""
         source = Path(rows[0]['archive'])
+        temporary = None
         if source.drive.lower() != self.directory.drive.lower():
             # A sibling of the installation is outside all scanned game archive paths.
             # Never write temporary utoc copies inside Content/Paks or Saved/Paks.
             try:
-                return tempfile.TemporaryDirectory(prefix='.nikki-studio-stage-',
-                                                   dir=Path(self.config['gameRoot']).parent)
+                temporary = tempfile.TemporaryDirectory(prefix='.nikki-studio-stage-',
+                                                         dir=Path(self.config['gameRoot']).parent)
             except OSError:
                 self.progress('游戏盘临时目录不可写，将检查跨卷复制空间')
-        return tempfile.TemporaryDirectory(prefix='stage-', dir=self.directory)
+        temporary = temporary or tempfile.TemporaryDirectory(prefix='stage-', dir=self.directory)
+        registry = self.storage.cache / 'staging-registry'
+        registry.mkdir(exist_ok=True)
+        record = registry / (Path(temporary.name).name + '.json')
+        write_json(record, {'path': temporary.name, 'parent': str(Path(self.config['gameRoot']).parent.resolve())})
+        try:
+            yield temporary.name
+        finally:
+            temporary.cleanup()
+            record.unlink(missing_ok=True)
 
     @staticmethod
     def read_objects(root, package):

@@ -8,10 +8,14 @@ from pathlib import Path
 
 
 class ParserWorker:
-    def __init__(self, executable, config):
+    def __init__(self, executable, config, temp_directory=None):
         self.lock = threading.Lock()
         self.responses = queue.Queue()
-        self.process = subprocess.Popen([str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        env = os.environ.copy()
+        if temp_directory:
+            Path(temp_directory).mkdir(parents=True, exist_ok=True)
+            env.update(TEMP=str(Path(temp_directory).resolve()), TMP=str(Path(temp_directory).resolve()))
+        self.process = subprocess.Popen([str(executable)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env,
             stderr=subprocess.DEVNULL, text=True, encoding='utf-8',
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
         def reader():
