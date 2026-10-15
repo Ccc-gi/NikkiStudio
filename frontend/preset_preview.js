@@ -3,22 +3,32 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {FurnitureInstances} from './furniture_instances.js';
 import {previewCameraDistance} from './preset_preview_geometry.js';
+import {createPreviewRenderLoop} from './preview_render_loop.js';
 
 export function installPresetPreview({loadItems,isReady,editorState=()=>null}){
   const dialog=document.createElement('dialog');dialog.id='presetModelDialog';dialog.className='preset-model-dialog';dialog.setAttribute('aria-labelledby','presetModelTitle');
   dialog.innerHTML='<header><div><strong id="presetModelTitle">预设模型</strong><small id="presetModelMeta"></small></div><button id="closePresetModel" aria-label="关闭预设模型预览">✕</button></header><div id="presetModelViewport"></div><footer><span id="presetModelStatus" role="status"></span><button id="fitPresetModel">查看整体</button></footer><p>左键旋转 · 右键平移 · 滚轮缩放 · 预览不会修改当前场景</p>';
   document.body.append(dialog);dialog.addEventListener('keydown',e=>e.stopPropagation());
   const viewport=dialog.querySelector('#presetModelViewport'),status=dialog.querySelector('#presetModelStatus');
-  let renderer,scene,camera,controls,batches,root,floor,sun,idleTimer,editorBefore,shaderError=false,owned=new Set(),libraryActive=false,viewerActive=false,revision=0,controller,chain=Promise.resolve(),pumping=false,raf=0,lastFrame=0;
+  let renderer,scene,camera,controls,batches,root,floor,sun,idleTimer,editorBefore,shaderError=false,owned=new Set(),libraryActive=false,viewerActive=false,revision=0,controller,chain=Promise.resolve(),pumping=false,previewReady=false,capturing=false;
+  function draw(){
+    const start=performance.now();renderer.render(scene,camera);
+    dialog.dataset.drawCalls=String(renderer.info.render.calls);
+    dialog.dataset.frames=String(Number(dialog.dataset.frames??0)+1);
+    dialog.dataset.renderCpuMs=(performance.now()-start).toFixed(2);
+    dialog.dataset.triangles=String(renderer.info.render.triangles);
+  }
+  const loop=createPreviewRenderLoop({active:()=>viewerActive&&previewReady&&!capturing&&!document.hidden,
+    update:()=>controls.update(),render:draw});
   const pending=[],jobs=new Map(),urls=new Map(),listeners=new Set();
   function ensureRenderer(){
     clearTimeout(idleTimer);
     if(renderer)return;
-    renderer=new T.WebGLRenderer({antialias:true,alpha:false,preserveDrawingBuffer:true,logarithmicDepthBuffer:true});
+    renderer=new T.WebGLRenderer({antialias:true,alpha:false});
     renderer.setPixelRatio(1);renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
     // Fine editor mode patches the global raw-depth shadow shader. Basic uses
     // that extension safely; PCF defines the same sampling helper a second time.
-    renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.BasicShadowMap;
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.BasicShadowMap;renderer.shadowMap.autoUpdate=false;
     renderer.debug.onShaderError=(gl,program,vertex,fragment)=>{shaderError=true;console.error('预设预览材质编译失败：'+gl.getShaderInfoLog(fragment));};
     scene=new T.Scene();scene.background=new T.Color('#e9edf0');
     const room=new RoomEnvironment(),pmrem=new T.PMREMGenerator(renderer);scene.environment=pmrem.fromScene(room,.04).texture;room.dispose();pmrem.dispose();
@@ -27,6 +37,7 @@ export function installPresetPreview({loadItems,isReady,editorState=()=>null}){
     const fill=new T.DirectionalLight(0xdceaff,.7);fill.position.set(-20,15,-10);scene.add(fill);
     camera=new T.PerspectiveCamera(40,1,.01,10000);
     controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.enablePan=true;controls.enabled=false;
+    controls.addEventListener('change',()=>loop.invalidate());
     batches=new FurnitureInstances(scene);
   }
   function release(){
@@ -43,9 +54,9 @@ export function installPresetPreview({loadItems,isReady,editorState=()=>null}){
   function fit(){
     if(!root)return;root.updateMatrixWorld(true);
     const box=root.userData.previewBounds,size=box.getSize(new T.Vector3()),center=box.getCenter(new T.Vector3()),distance=previewCameraDistance(size,camera.aspect);
-    camera.near=Math.max(.01,distance/10000);camera.far=Math.max(100,distance*20);camera.updateProjectionMatrix();
+    camera.near=Math.max(.01,distance/500);camera.far=Math.max(100,distance*20);camera.updateProjectionMatrix();
     controls.target.copy(center);camera.position.copy(center).add(new T.Vector3(1,.65,1.15).normalize().multiplyScalar(distance));
-    controls.minDistance=distance*.03;controls.maxDistance=distance*8;controls.update();renderer.render(scene,camera);
+    controls.minDistance=distance*.03;controls.maxDistance=distance*8;controls.update();draw();
   }
   function attach(result){
     release();shaderError=false;root=result.group;scene.add(root);
@@ -62,7 +73,7 @@ export function installPresetPreview({loadItems,isReady,editorState=()=>null}){
     floor=new T.Mesh(new T.PlaneGeometry(extent*30,extent*30),new T.MeshStandardMaterial({color:0xcbd3d6,roughness:1,metalness:0}));floor.rotation.x=-Math.PI/2;floor.position.set(center.x,box.min.y-extent*.002,center.z);floor.receiveShadow=true;scene.add(floor);
     sun.position.copy(center).add(new T.Vector3(.6,1,.5).multiplyScalar(extent*2));sun.target.position.copy(center);
     const shadow=extent*.85;Object.assign(sun.shadow.camera,{left:-shadow,right:shadow,top:shadow,bottom:-shadow,near:.01,far:extent*8});sun.shadow.camera.updateProjectionMatrix();sun.shadow.normalBias=extent*.0004;
-    renderer.shadowMap.enabled=result.total<=200;batches.rebuild(root);fit();
+    renderer.shadowMap.enabled=result.total<=200;renderer.shadowMap.needsUpdate=true;batches.rebuild(root);fit();
     return result;
   }
   async function exclusive(work){const task=chain.catch(()=>{}).then(work);chain=task;return task;}
@@ -73,12 +84,18 @@ export function installPresetPreview({loadItems,isReady,editorState=()=>null}){
   }
   async function saveThumbnail(preset,result){
     if(!preset.previewKey||result.missing.length)return null;
+    if(preset.previewUrl||urls.has(preset.previewKey))return preset.previewUrl??urls.get(preset.previewKey);
     if(shaderError)throw Error('预览材质编译失败，未缓存缩略图');
     const oldPosition=camera.position.clone(),oldTarget=controls.target.clone(),oldSize=renderer.getSize(new T.Vector2());
-    controls.enabled=false;sizeRenderer(512,320);fit();
-    const blob=await new Promise(resolve=>renderer.domElement.toBlob(resolve,'image/png'));
-    sizeRenderer(oldSize.x,oldSize.y);camera.position.copy(oldPosition);controls.target.copy(oldTarget);controls.update();
-    if(viewerActive)controls.enabled=true;
+    capturing=true;loop.stop();let blob;
+    try{
+      controls.enabled=false;sizeRenderer(512,320);fit();
+      // Capture immediately after rendering; no preserved WebGL backbuffer needed.
+      blob=await new Promise(resolve=>renderer.domElement.toBlob(resolve,'image/png'));
+    }finally{
+      sizeRenderer(oldSize.x,oldSize.y);camera.position.copy(oldPosition);controls.target.copy(oldTarget);controls.update();
+      capturing=false;if(viewerActive)controls.enabled=true;loop.invalidate();
+    }
     if(!blob)throw Error('预览图生成失败');
     const image=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=()=>reject(Error('预览图编码失败'));reader.readAsDataURL(blob);});
     const session=await fetch('/api/session',{cache:'no-store'}).then(r=>r.json());
@@ -106,29 +123,29 @@ export function installPresetPreview({loadItems,isReady,editorState=()=>null}){
     if(!jobs.has(preset.previewKey)){const task=new Promise((resolve,reject)=>pending.push({preset,resolve,reject}));jobs.set(preset.previewKey,task);pump();}
     return jobs.get(preset.previewKey);
   }
-  function animate(time){if(!viewerActive)return;raf=requestAnimationFrame(animate);if(time-lastFrame<33||document.hidden)return;lastFrame=time;controls?.update();if(root){renderer.render(scene,camera);dialog.dataset.drawCalls=String(renderer.info.render.calls);dialog.dataset.frames=String(Number(dialog.dataset.frames??0)+1);}}
-  function close(){viewerActive=false;revision++;controller?.abort();cancelAnimationFrame(raf);if(dialog.open)dialog.close();if(controls)controls.enabled=false;
+  function close(){viewerActive=false;previewReady=false;revision++;controller?.abort();loop.stop();if(dialog.open)dialog.close();if(controls)controls.enabled=false;
     dialog.dataset.editorPreserved=String(editorBefore===JSON.stringify(editorState()));
     exclusive(()=>release()).finally(()=>pump());
   }
   async function open(document_,preset){
     if(!viewerActive)editorBefore=JSON.stringify(editorState());
-    viewerActive=true;const token=++revision;controller?.abort();controller=new AbortController();const signal=controller.signal;
+    viewerActive=true;previewReady=false;const token=++revision;controller?.abort();controller=new AbortController();const signal=controller.signal;
     dialog.querySelector('#presetModelTitle').textContent=document_.name;dialog.querySelector('#presetModelMeta').textContent=document_.items.length+' 件物品';status.textContent='正在准备模型与材质…';
-    if(!dialog.open)dialog.showModal();cancelAnimationFrame(raf);
+    if(!dialog.open)dialog.showModal();loop.stop();
     try{await exclusive(async()=>{
       if(token!==revision)return;
       const result=await load(document_,signal,(done,total)=>{if(token===revision)status.textContent=`正在载入 ${done} / ${total} 件物品…`;});
       if(token!==revision)return;viewport.replaceChildren(renderer.domElement);
-      const rect=viewport.getBoundingClientRect();sizeRenderer(rect.width,rect.height);fit();controls.enabled=true;
+      const rect=viewport.getBoundingClientRect();sizeRenderer(rect.width,rect.height);fit();controls.enabled=true;previewReady=true;
       status.textContent=result.missing.length?`已显示 ${result.total-result.failed} / ${result.total} 件 · 缺失 ID：${result.missing.slice(0,10).join('、')}（预设已保留）`:`${result.total} 件物品 · 可旋转、缩放查看`;
       dialog.dataset.items=String(result.total);dialog.dataset.missing=JSON.stringify(result.missing);
       dialog.dataset.editorPreserved=String(editorBefore===JSON.stringify(editorState()));
-      raf=requestAnimationFrame(animate);
+      loop.invalidate();
       try{await saveThumbnail(preset,result);}catch(error){if(token===revision)status.textContent+=' · '+error.message;}
     });}catch(error){if(token===revision&&!signal.aborted)status.textContent='预览失败：'+error.message;}
   }
-  const resize=new ResizeObserver(()=>{if(viewerActive&&renderer&&root){const rect=viewport.getBoundingClientRect();sizeRenderer(rect.width,rect.height);renderer.render(scene,camera);}});resize.observe(viewport);
+  const resize=new ResizeObserver(()=>{if(viewerActive&&previewReady&&renderer&&root){const rect=viewport.getBoundingClientRect();sizeRenderer(rect.width,rect.height);loop.invalidate();}});resize.observe(viewport);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)loop.stop();else loop.invalidate();});
   dialog.querySelector('#closePresetModel').onclick=close;dialog.querySelector('#fitPresetModel').onclick=fit;dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
   return {open,thumbnail,subscribe(listener){listeners.add(listener);return()=>listeners.delete(listener);},setLibraryActive(value){libraryActive=value;if(value)pump();else if(!viewerActive)controller?.abort();}};
 }

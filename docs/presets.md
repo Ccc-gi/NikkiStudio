@@ -14,3 +14,7 @@
 验证：`python -m unittest discover -s tests -p 'test_preset*.py'`、`node tests/preset_management.mjs`、`node tests/presets.mjs`。Windows 清缓存验收只操作临时测试目录，不清理实际用户资源缓存。
 
 预览验证另包含 `tests/test_preset_previews.py` 和 `node tests/preset_preview_geometry.mjs`，覆盖图像格式、尺寸、缓存版本、旧图保留、路径校验与横竖视口完整取景。
+
+预览性能：相机操作与阻尼期间按浏览器刷新节奏绘制，不再限制为约 30 帧。相机静止后停止重绘；隐藏标签页暂停，恢复时重绘。静态阴影在装载新预设时生成一次；重复打开已有缩略图不再重新截图。
+
+`node tests/preview_render_loop.mjs` 验证刷新请求合并、连续交互、静止停绘、关闭取消和恢复。
