@@ -25,6 +25,24 @@ def bundled_parser():
                              ROOT / 'local/parser-worker/Nikki.AssetWorker.exe') if p.is_file()), None)
 
 
+def source_runtime_config(config):
+    """Move legacy release-folder references to an installed source dependency."""
+    config = dict(config)
+    worker = bundled_parser()
+    if not worker:
+        return config
+    release_root = (ROOT / 'dist').resolve()
+    uses_release = any(config.get(key) and Path(config[key]).resolve().is_relative_to(release_root)
+                       for key in ('parser', 'parserWorker'))
+    packaged = ROOT / 'parser-worker/Nikki.AssetWorker.exe'
+    if packaged.is_file() or uses_release:
+        config['parser'] = str(worker)
+        config['parserWorker'] = str(worker)
+    elif not config.get('parserWorker'):
+        config['parserWorker'] = str(worker)
+    return config
+
+
 class Application:
     def __init__(self, storage=None):
         self.storage = storage or Storage()
@@ -61,14 +79,7 @@ class Application:
         if not config:
             self.job_lock.release()
             raise ValueError('尚未完成配置')
-        config = dict(config)
-        bundled = ROOT / 'parser-worker/Nikki.AssetWorker.exe'
-        development = ROOT / 'local/parser-worker/Nikki.AssetWorker.exe'
-        if bundled.is_file():
-            config['parserWorker'] = str(bundled)
-            config['parser'] = str(bundled)
-        elif not config.get('parserWorker') and development.is_file():
-            config['parserWorker'] = str(development)
+        config = source_runtime_config(config)
         self.job = {'state': 'running', 'message': '正在校验输入'}
         def work():
             try:

@@ -1,14 +1,14 @@
 # Nikki Studio
 
-本地家园 JSON 存档编辑器，Windows 首发。工程只分发代码和通用依赖，不包含游戏模型、贴图、AES、usmap 或玩家存档。
+本地家园 JSON 存档编辑器，当前处于 Windows 本地源码开发阶段，尚未正式开源或发布。持续维护同一个 Git 工程，不生成产品发布包。工程不包含游戏模型、贴图、AES、usmap 或玩家存档。
 
 资源流程：启动时读取当前游戏的归档目录索引；使用家具时解析它的配置；导入存档时合并这份存档实际使用的模型和材质依赖，通过常驻解析器复用游戏挂载进行转换；结果留在用户缓存。不会预先导出整个家具库。
 
-## 玩家使用
+## 本地使用
 
-解压 Windows 发布包，运行 `NikkiStudio.exe`。无需安装 Python 或 Node.js。
+在本源码目录运行 `.venv/Scripts/python.exe launch.py`，浏览器打开 `http://127.0.0.1:8769`。当前本地依赖保留在 `.venv`、`node_modules` 与 `local`；运行不依赖 `dist`。
 
-首次页面选择游戏目录，粘贴自己取得的 AES JSON，选择匹配的 usmap 二进制文件。Windows 发行版已包含常驻资源解析器，无需另选 cue4parse.exe，也无需安装 .NET。解析器原生解压依赖会按上游机制初始化，首次配置需要可用的网络或已存在的本地依赖。源码环境可以构建常驻解析器，也保留用户自备 CUE4Parse.CLI 的兼容接口。
+首次页面选择游戏目录，粘贴自己取得的 AES JSON，选择匹配的 usmap 二进制文件。源码环境优先使用 `local` 中已构建的常驻资源解析器，也保留用户自备 CUE4Parse.CLI 的兼容接口。解析器原生解压依赖会按上游机制初始化，首次配置需要可用的网络或已存在的本地依赖。
 
 AES 与 usmap 参考链接在配置页中；服务不会抓取它们。`/mappings` 返回的 JSON 是元数据，要取得实际 `.usmap` 文件。AES 只送给回环地址上的本地服务。配置、输入文件和缓存默认在 `%LOCALAPPDATA%/NikkiStudio`，可以用 `--data-dir` 或 `NIKKI_STUDIO_DATA` 更改。
 
@@ -31,10 +31,11 @@ py -3 -X utf8 scripts/setup_dependencies.py
 py -3 -X utf8 -m unittest discover -s tests -v
 npm test
 py -3 -X utf8 scripts/audit_release.py
-py -3 -X utf8 scripts/build_release.py
 ```
 
-构建常驻解析器需要 .NET 10 SDK 和 Git：运行 `py -3 -X utf8 scripts/build_parser_worker.py`，脚本使用固定的 CUE4Parse 源码提交，输出自带运行时的解析器到 local/parser-worker。构建 Windows 包：在构建环境安装 `requirements-build.txt`，再运行 `scripts/build_release.py --windows`。输出在 dist。所有发布文件使用明确的允许清单，并再次检查游戏包、模型、密钥字面值和电脑路径。
+缺少本地解析器时，构建它需要 .NET 10 SDK 和 Git：运行 `py -3 -X utf8 scripts/build_parser_worker.py`，脚本使用固定的 CUE4Parse 源码提交，输出自带运行时的依赖到 `local/parser-worker`。当前正在使用的解析器优先从 `local/parser-worker-mips` 读取。旧配置若引用本工程 `dist` 中的解析器，会迁移到可用的本地依赖，用户配置与预设保留。
+
+`project-policy.json` 的 `releaseEnabled` 当前为 `false`，`scripts/build_release.py` 会在生成任何发布文件前停止。仅在用户明确要求正式发布后更新该状态；发布构建脚本保留供将来使用，日常只运行、测试和提交源码。
 
 ## 当前兼容边界
 

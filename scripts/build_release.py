@@ -15,6 +15,10 @@ if __name__ == '__main__':
     p.add_argument('--windows', action='store_true')
     p.add_argument('--out-dir')
     args = p.parse_args()
+    policy_file = ROOT / 'project-policy.json'
+    policy = json.loads(policy_file.read_text(encoding='utf-8')) if policy_file.exists() else {}
+    if policy.get('releaseEnabled') is not True:
+        raise SystemExit('当前为本地源码开发阶段，已禁用发布打包。仅在用户明确要求正式发布后更新 project-policy.json。')
     report = audit()
     output = Path(args.out_dir).resolve() if args.out_dir else ROOT / 'dist'
     output.mkdir(exist_ok=True)
