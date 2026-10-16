@@ -7,6 +7,8 @@ TOP = {'README.md', 'LICENSE', 'NOTICE.md', 'AGENTS.md', 'project-policy.json', 
        'package.json', 'package-lock.json', 'config.example.json', 'keys.example.json', 'start.py', 'launch.py'}
 FOLDERS = {'frontend', 'backend', 'asset_pipeline', 'adapters', 'tests', 'docs', 'third_party', '.github'}
 SCRIPTS = {'audit_release.py', 'build_release.py', 'setup_dependencies.py', 'build_parser_worker.py', 'dev_preview.py'}
+DOC_SCREENSHOTS = {'docs/images/editor-overview.png', 'docs/images/editor-properties.png',
+                   'docs/images/editor-presets.png'}
 
 
 def release_files():
@@ -25,8 +27,15 @@ def audit(files=None):
         rel = path.relative_to(ROOT)
         if path.suffix.lower() in {'.ucas', '.utoc', '.pak', '.usmap', '.glb', '.exe', '.record'}:
             problems.append(str(rel) + ': forbidden game/private/binary input')
-        if path.stat().st_size > 2 * 1024 * 1024:
+        screenshot = rel.as_posix() in DOC_SCREENSHOTS
+        if path.stat().st_size > (8 if screenshot else 2) * 1024 * 1024:
             problems.append(str(rel) + ': unexpected large source file')
+        # Explicit documentation screenshots are PNGs, not extracted game assets.
+        if screenshot:
+            raw = path.read_bytes()
+            if not (raw.startswith(b'\x89PNG\r\n\x1a\n') and raw.endswith(b'\x00\x00\x00\x00IEND\xaeB`\x82')):
+                problems.append(str(rel) + ': invalid documentation PNG')
+            continue
         text = path.read_text(encoding='utf-8')
         if re.search(r'[A-Z]:[\\/]Users[\\/][^\\/\s]+', text, re.I):
             problems.append(str(rel) + ': machine-specific user path')
