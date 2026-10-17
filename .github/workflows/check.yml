@@ -18,4 +18,4 @@ jobs:
       - run: npm test
       - run: python scripts/audit_release.py
       # Routine source validation does not create release artifacts.
-      # Release packaging remains disabled by project-policy.json.
+      # Authorized release builds run separately under project-policy.json.

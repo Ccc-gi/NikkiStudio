@@ -333,3 +333,5 @@ body.single-preview .scene-view-actions{display:none}
   100%{transform:scaleY(.12)}
 }
 @media (prefers-reduced-motion:reduce){.konami-cat{display:none}}
+
+.brand{display:flex;align-items:center;gap:8px}.brand img{display:block;object-fit:contain;flex-shrink:0}

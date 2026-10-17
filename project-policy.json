@@ -1,4 +1,4 @@
 {
-  "stage": "local-source-development",
-  "releaseEnabled": false
+  "stage": "windows-portable-release",
+  "releaseEnabled": true
 }

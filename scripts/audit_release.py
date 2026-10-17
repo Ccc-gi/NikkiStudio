@@ -36,6 +36,16 @@ def audit(files=None):
             if not (raw.startswith(b'\x89PNG\r\n\x1a\n') and raw.endswith(b'\x00\x00\x00\x00IEND\xaeB`\x82')):
                 problems.append(str(rel) + ': invalid documentation PNG')
             continue
+        if rel.as_posix() == 'frontend/app-icon.png':
+            raw = path.read_bytes()
+            if not (raw.startswith(b'\x89PNG\r\n\x1a\n') and raw.endswith(b'\x00\x00\x00\x00IEND\xaeB`\x82')):
+                problems.append(str(rel) + ': invalid application PNG')
+            continue
+        if rel.as_posix() == 'frontend/app-icon.ico':
+            raw = path.read_bytes()
+            if len(raw) < 22 or raw[:4] != b'\x00\x00\x01\x00':
+                problems.append(str(rel) + ': invalid application ICO')
+            continue
         text = path.read_text(encoding='utf-8')
         if re.search(r'[A-Z]:[\\/]Users[\\/][^\\/\s]+', text, re.I):
             problems.append(str(rel) + ': machine-specific user path')

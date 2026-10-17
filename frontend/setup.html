@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Nikki Studio · 本地配置</title><script>try{if(localStorage.getItem('nikki.cursorStyle')==='system')document.documentElement.classList.add('system-cursor')}catch{}</script>
+<title>Nikki Studio · 本地配置</title><link rel="icon" href="/app-icon.ico" sizes="any"><script>try{if(localStorage.getItem('nikki.cursorStyle')==='system')document.documentElement.classList.add('system-cursor')}catch{}</script>
 <link rel="stylesheet" href="/setup.css">
-<main><h1>Nikki Studio</h1><p>连接你安装的游戏。资源在这台电脑上按需转换，不随编辑器下载。</p>
+<main><h1><img src="/app-icon.png" alt="" width="48" height="48"> Nikki Studio</h1><p>连接你安装的游戏。资源在这台电脑上按需转换，不随编辑器下载。</p>
 <form id="setup">
 <label>游戏目录<div class="row"><input id="gameRoot" list="gameCandidates" required placeholder="包含 X6Game 的目录"><datalist id="gameCandidates"></datalist><button type="button" data-browse="game">选择目录</button></div></label>
 <label>AES JSON<textarea id="keys" required rows="5" placeholder='{"mainKey":"…","dynamicKeys":[{"guid":"…","key":"…"}]}' autocomplete="off" spellcheck="false"></textarea></label>
@@ -14,5 +14,5 @@
 </form>
 <div id="progress" role="status" aria-live="polite">正在检查本地服务…</div>
 <div class="row"><button id="revalidate" hidden>重新校验当前配置</button><a id="enter" hidden href="/save_scene.html?save=new">进入编辑器</a><a id="recover" hidden href="/save_scene.html?save=new&recovery=1">打开旧缓存恢复视图</a></div>
-<p id="directory" class="hint"></p><p class="hint">默认生成缓存位于工程 local/cache，配置与预设保存在用户目录；独立数据目录模式使用其中的缓存。游戏更新后需要重新校验；失败时保留原缓存。</p>
+<p id="directory" class="hint"></p><p class="hint">默认缓存位于源码工程 local/cache 或 Portable 程序旁的 cache；配置与预设保存在用户目录，独立数据目录模式使用其中的缓存。游戏更新后需要重新校验；失败时保留原缓存。</p>
 </main><script type="module" src="/setup.js"></script></html>

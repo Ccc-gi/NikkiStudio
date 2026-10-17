@@ -21,6 +21,18 @@ class ManagedCacheTests(unittest.TestCase):
             store = Storage(Path(temp) / 'test-user')
             self.assertEqual(store.cache, store.root / 'cache')
 
+    def test_portable_cache_is_next_to_executable_and_private_data_stays_separate(self):
+        with tempfile.TemporaryDirectory() as temp:
+            base = Path(temp)
+            executable = base / 'portable/NikkiStudio.exe'
+            with patch.dict('os.environ', {'LOCALAPPDATA': str(base / 'user'), 'NIKKI_STUDIO_DATA': ''}), \
+                    patch('sys.frozen', True, create=True), patch('sys.executable', str(executable)):
+                store = Storage()
+                self.assertEqual(store.cache, base / 'portable/cache')
+                self.assertEqual(store.private, base / 'user/NikkiStudio/private')
+                isolated = Storage(base / 'isolated')
+                self.assertEqual(isolated.cache, base / 'isolated/cache')
+
     def test_migration_preserves_epoch_pointer_bytes_and_private_data(self):
         with tempfile.TemporaryDirectory() as temp:
             base = Path(temp)

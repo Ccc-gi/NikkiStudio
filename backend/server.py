@@ -394,7 +394,9 @@ def serve(port=8768, data_dir=None, open_browser=False, browser_path='/'):
         try:
             with urllib.request.urlopen(url + '/api/session', timeout=2) as response:
                 existing = json.load(response)
-            if existing.get('application') == 'NikkiStudio' and existing.get('version') == VERSION and existing['status']['dataDirectory'] == str(app.storage.root):
+            if (existing.get('application') == 'NikkiStudio' and existing.get('version') == VERSION and
+                    existing['status']['dataDirectory'] == str(app.storage.root) and
+                    existing['status'].get('cacheDirectory') == str(app.storage.cache)):
                 if open_browser:
                     import webbrowser
                     webbrowser.open(url + browser_path)

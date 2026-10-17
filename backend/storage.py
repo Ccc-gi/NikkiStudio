@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import secrets
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -36,8 +37,10 @@ class Storage:
         self.root = Path(root or os.environ.get('NIKKI_STUDIO_DATA') or
                          Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'NikkiStudio').resolve()
         self.private = self.root / 'private'
+        default_cache = (Path(sys.executable).resolve().parent / 'cache' if getattr(sys, 'frozen', False)
+                         else Path(__file__).resolve().parents[1] / 'local/cache')
         self.cache = Path(cache_root or (self.root / 'cache' if custom else
-                          Path(__file__).resolve().parents[1] / 'local/cache')).absolute()
+                          default_cache)).absolute()
         if self.cache.is_symlink() or self.cache.is_junction():
             raise ValueError('缓存目录不能是链接目录')
         self.cache = self.cache.resolve()

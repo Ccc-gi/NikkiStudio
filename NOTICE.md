@@ -11,3 +11,5 @@ Nikki.AssetWorker 是本项目的常驻 stdio 解析器，Windows 包包含其�
 cryptography、numpy、PyInstaller 及其运行时依赖的许可随构建包保留；依赖锁定与本地构建结果见发布清单。
 
 游戏美术、归档、密钥、映射文件和真实存档不属于本项目的开源内容。源码许可证不授予这些内容的权利。
+
+应用的小屋积木图标由本项目使用图像生成工具原创制作，不使用游戏官方图标；设计说明与生成提示词见 docs/icon-design.md。PNG 与 Windows ICO 随程序提供。
