@@ -29,7 +29,23 @@
 
 </details>
 
-## 🧰 使用前准备
+## 🧭 使用总览
+
+**准备游戏输入 → 启动应用 → 配置资源 → 打开存档 → 编辑与保存。**
+
+| 目标 | 入口与说明 |
+| --- | --- |
+| 下载使用 | 查看 [Portable 使用说明](docs/PORTABLE.md)，Windows x64 免安装包无需安装开发工具 |
+| 从源码运行 | 展开 [使用前准备](#preparation) 和 [从源码启动](#source-start)，安装依赖并构建解析器 |
+| 开始编辑 | 展开 [首次配置与编辑](#configuration)，准备游戏目录、AES、usmap 和家园 JSON 存档 |
+| 管理数据 | 展开 [数据保存在哪里](#data-storage)，了解配置、预设与缓存位置 |
+| 了解兼容性 | 展开 [当前限制](#limitations)，查看预览效果和游戏版本的支持边界 |
+| 参与开发 | 展开 [开发与测试](#development)，查看测试命令和技术文档 |
+
+以下详细说明默认折叠，点击标题展开。
+
+<details id="preparation">
+<summary><strong>🧰 使用前准备</strong></summary>
 
 ### 运行环境
 
@@ -63,7 +79,10 @@ GitHub Desktop 可以管理项目，但构建脚本还需要终端能直接执�
 
 AES 与 usmap 的参考链接位于首次配置页面，程序不会自动抓取它们。
 
-## 🚀 从源码启动
+</details>
+
+<details id="source-start">
+<summary><strong>🚀 从源码启动</strong></summary>
 
 ### 1. 下载源码
 
@@ -99,7 +118,10 @@ py -3 -X utf8 scripts/build_parser_worker.py
 
 以后启动只需执行这一步；依赖或解析器源码更新时，再按更新说明重新安装或构建。
 
-## 🎨 首次配置与编辑
+</details>
+
+<details id="configuration">
+<summary><strong>🎨 首次配置与编辑</strong></summary>
 
 1. 在配置页面选择游戏目录，填写自己的 AES JSON，上传匹配的 `.usmap` 文件。默认会查找工程内已构建的解析器，也保留自备 CUE4Parse.CLI 的兼容入口。
 2. 等待资源校验通过。解析器原生解压依赖首次初始化也可能需要网络。
@@ -111,7 +133,10 @@ py -3 -X utf8 scripts/build_parser_worker.py
 
 资源配置中的游戏路径供后端读取模型；“游戏 → 选择游戏目录”用于浏览器授权存档读写，两者需要分别配置。后续资源配置可在设置中查看。
 
-## 📁 数据保存在哪里
+</details>
+
+<details id="data-storage">
+<summary><strong>📁 数据保存在哪里</strong></summary>
 
 | 内容 | 默认位置 |
 | --- | --- |
@@ -130,7 +155,10 @@ py -3 -X utf8 scripts/build_parser_worker.py
 
 显式 `--data-dir` 或环境变量 `NIKKI_STUDIO_DATA` 会将配置与缓存放入指定数据目录。普通启动仍使用默认用户目录；不要将密钥、映射或存档提交到仓库。
 
-## ⚠️ 当前限制
+</details>
+
+<details id="limitations">
+<summary><strong>⚠️ 当前限制</strong></summary>
 
 - 三维预览依赖当前游戏资源、匹配的密钥和映射。未支持或缺失的资源可能显示占位，存档中的相应数据仍会保留。
 - 部分动画、特效、地形、水体和材质效果存在近似，预览不保证与游戏画面完全一致。
@@ -140,7 +168,10 @@ py -3 -X utf8 scripts/build_parser_worker.py
 
 详细说明见 [资源解析与兼容边界](docs/resource-compatibility.md)。
 
-## 🧪 开发与测试
+</details>
+
+<details id="development">
+<summary><strong>🧪 开发与测试</strong></summary>
 
 完成依赖安装后执行：
 
@@ -156,6 +187,8 @@ npm test
 - [缓存管理](docs/cache-management.md)：缓存位置、清理和卸载。
 - [架构说明](docs/ARCHITECTURE.md)：资源处理与存档设计。
 - [更新记录](docs/CHANGELOG.md)。
+
+</details>
 
 ## 📄 许可与第三方项目
 
