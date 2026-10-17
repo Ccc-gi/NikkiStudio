@@ -115,13 +115,32 @@ def windows_bundle(output, version, requested_worker=None):
                '--add-data', str(ROOT / 'node_modules/three') + ';node_modules/three',
                '--add-data', str(ROOT / 'third_party') + ';third_party',
                '--add-data', str(ROOT / 'package.json') + ';.',
-               '--hidden-import', 'tkinter', '--hidden-import', 'tkinter.filedialog', str(ROOT / 'launch.py')]
+               '--hidden-import', 'tkinter', '--hidden-import', 'tkinter.filedialog',
+               '--hidden-import', 'PIL._imaging', '--hidden-import', 'PIL.PngImagePlugin', str(ROOT / 'launch.py')]
     print('Building Portable EXE; diagnostics: ' + str(log), flush=True)
     with log.open('wb') as stream:
         result = subprocess.run(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT)
     if result.returncode:
         raise RuntimeError('Portable build failed; diagnostics: ' + str(log))
     bundle = work / 'dist/NikkiStudio'
+    # Keep a plain .pyd entry as well as the ABI-tagged extension name. Both are
+    # supported by CPython; this also works with frozen importers using .pyd only.
+    for extension in (bundle / '_internal/PIL').glob('*.pyd'):
+        plain = extension.with_name(extension.name.split('.')[0] + '.pyd')
+        if plain != extension:
+            shutil.copy2(extension, plain)
+    if not (bundle / '_internal/PIL/_imaging.pyd').is_file():
+        raise ValueError('Portable is missing the Pillow native imaging module')
+    runtime_report = work / 'runtime-diagnostics.json'
+    env = os.environ.copy()
+    for name in list(env):
+        if name.upper() in {'PYTHONHOME', 'PYTHONPATH', 'VIRTUAL_ENV', 'DOTNET_ROOT'}:
+            env.pop(name)
+    env['PATH'] = str(Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32')
+    check = subprocess.run([str(bundle / 'NikkiStudio.exe'), '--check-runtime', '--no-browser',
+                            '--runtime-report', str(runtime_report)], env=env, cwd=bundle, timeout=60)
+    if check.returncode or not runtime_report.is_file() or not json.loads(runtime_report.read_text(encoding='utf-8'))['passed']:
+        raise RuntimeError('Portable native runtime check failed; diagnostics: ' + str(runtime_report))
     shutil.copytree(worker, bundle / '_internal/parser-worker')
     runtime_config = json.loads((worker / 'Nikki.AssetWorker.runtimeconfig.json').read_text(encoding='utf-8'))
     dotnet_version = next(item['version'] for item in runtime_config['runtimeOptions']['includedFrameworks']
@@ -137,6 +156,7 @@ def windows_bundle(output, version, requested_worker=None):
         shutil.copy2(source, target)
     (bundle / 'ClearCache.cmd').write_text('@echo off\r\nstart "" "%~dp0NikkiStudio.exe" --clear-cache\r\n', encoding='ascii')
     (bundle / 'Exit.cmd').write_text('@echo off\r\n"%~dp0NikkiStudio.exe" --stop\r\n', encoding='ascii')
+    (bundle / 'CheckRuntime.cmd').write_text('@echo off\r\n"%~dp0NikkiStudio.exe" --check-runtime\r\n', encoding='ascii')
     shutil.copy2(ROOT / 'docs/PORTABLE.md', bundle / 'README.md')
     for name in ['LICENSE', 'NOTICE.md']:
         shutil.copy2(ROOT / name, bundle / name)

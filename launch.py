@@ -29,15 +29,29 @@ def stop_server(port, data_dir=None):
 
 
 if __name__ == '__main__':
-    from backend.server import serve
     parser = argparse.ArgumentParser()
     parser.add_argument('--port', type=int, default=8769)
     parser.add_argument('--data-dir')
     parser.add_argument('--no-browser', action='store_true')
     parser.add_argument('--stop', action='store_true', help='正常退出使用同一数据目录和缓存的本地服务')
     parser.add_argument('--clear-cache', action='store_true', help='清除生成的资源缓存并冷启动，保留配置和存档')
+    parser.add_argument('--check-runtime', action='store_true', help='检查随包图像与原生依赖，不读取游戏配置')
+    parser.add_argument('--runtime-report', help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
+        if args.check_runtime:
+            from backend.runtime_check import write_report
+            report_path = Path(args.runtime_report) if args.runtime_report else (
+                Path(sys.executable).parent if getattr(sys, 'frozen', False) else Path(__file__).parent / 'test-results'
+            ) / 'runtime-diagnostics.json'
+            report = write_report(report_path)
+            message = ('运行时检查通过。' if report['passed'] else '运行时检查失败。') + '\n报告：' + str(report_path)
+            if sys.stdout:
+                print(message, flush=True)
+            if sys.platform == 'win32' and not args.no_browser:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(None, message, 'Nikki Studio 运行时检查', 0x40 if report['passed'] else 0x10)
+            raise SystemExit(0 if report['passed'] else 1)
         if args.stop:
             stop_server(args.port, args.data_dir)
             raise SystemExit(0)
@@ -47,6 +61,7 @@ if __name__ == '__main__':
             size = reset_resources(Storage(args.data_dir), tuple(dict.fromkeys((8768, 8769, args.port))))
             if sys.stdout:
                 print(f'已清除资源缓存：{size / 1024 / 1024:.1f} MiB', flush=True)
+        from backend.server import serve
         serve(args.port, args.data_dir, open_browser=not args.no_browser,
               browser_path='/clear_cache.html' if args.clear_cache else '/')
     except Exception as exc:
