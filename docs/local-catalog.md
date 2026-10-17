@@ -1,6 +1,6 @@
 # 本机家具目录与图标
 
-家具名称来自当前 `X6Game/Saved/PaperBin` 的 TbItem 本地化记录，预览图来自物品配置的明确资源引用。分类来自 HomeNew 标签、物品标签数组和 DT_HomeObjectUIHierarchyType 的中文名称、图标与层级。目录不依赖研究版 JSON 或预导出图片；可选外部元数据用于尚未取得本机名称的回退与尺寸信息，设置页把这一项标为“家具名称与尺寸”。建造限制不再来自该文件，见 `adapters/build_rules.py`。
+家具名称来自当前 `X6Game/Saved/PaperBin` 的 TbItem 本地化记录，预览图来自物品配置的明确资源引用。分类来自 HomeNew 标签、物品标签数组和 DT_HomeObjectUIHierarchyType 的中文名称、图标与层级。目录按当前游戏文件生成；可选外部元数据用于尚未取得本机名称的回退与尺寸信息，设置页把这一项标为“家具名称与尺寸”。建造限制不再来自该文件，见 `adapters/build_rules.py`。
 
 `adapters/paperbin_catalog.py` 解析已观察并验证的紧凑整数、字符串与目录关联。未知格式返回兼容性诊断，不覆写已存在的目录缓存。“设置 → 资源管理”显示解析覆盖数量；没有当前目录记录的物品保留 ID 与“未分类”，不推测名称或分类。
 

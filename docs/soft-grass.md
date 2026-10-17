@@ -33,8 +33,7 @@
 
 验证：`node tests/soft_grass.mjs`、`node tests/garden_growth.mjs`。
 
-开发时在同一源码工程中修改，使用 Git 记录版本。
 Windows 下运行 `py -3 -X utf8 scripts/dev_preview.py`，预览地址为
 `http://127.0.0.1:8769/save_scene.html?save=new`。
 已有本地 Nikki Studio 服务会正常退出，保留配置和缓存。
-修改前端后刷新网页并重新打开测试存档即可，不必复制工程或重新打包。
+修改前端后刷新网页并重新打开测试存档即可查看效果。

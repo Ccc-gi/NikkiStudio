@@ -4,11 +4,10 @@
 
 当前处于开发与验证阶段，支持 Windows 源码运行，并提供 Windows x64 Portable 构建方式。普通用户使用免安装包的步骤见 [Portable 使用说明](docs/PORTABLE.md)；以下环境准备与安装命令供源码运行使用。
 
-用户已反馈在云电脑准备环境后可以使用源码版；这不代替 Portable 成品在未安装开发工具的环境中的验收，也不代表所有游戏版本都兼容。
-
 项目不附带游戏模型、贴图、AES 密钥、usmap 或玩家存档。这些输入需要用户自行准备，并与自己的游戏版本匹配。
 
-受 https://github.com/ChanIok/BuildingMomo 启发，参考了部分代码。
+项目受 [BuildingMomo](https://github.com/ChanIok/BuildingMomo) 启发，并参考了部分代码。
+
 ## 🏡 界面预览
 
 打开家园存档，在三维场景中查看布局，通过左侧列表选择家具，在右侧调整位置、旋转、缩放和可用配色。
@@ -117,7 +116,7 @@ py -3 -X utf8 scripts/build_parser_worker.py
 | 内容 | 默认位置 |
 | --- | --- |
 | 用户配置、AES、usmap、预设 | `%LOCALAPPDATA%/NikkiStudio` |
-| 生成的模型、贴图及预览缓存 | 工程内 `local/cache` |
+| 生成的模型、贴图及预览缓存 | 源码版：工程内 `local/cache`；Portable：EXE 旁的 `cache` |
 | Python、前端及解析器依赖 | 工程内 `.venv`、`node_modules`、`local` |
 | 导出存档 | 浏览器保存对话框选择的位置，或浏览器下载目录 |
 
@@ -137,7 +136,7 @@ py -3 -X utf8 scripts/build_parser_worker.py
 - 部分动画、特效、地形、水体和材质效果存在近似，预览不保证与游戏画面完全一致。
 - 建造限制校验尚未完整覆盖；编辑器能保存 JSON，不代表游戏一定接受修改后的存档。
 - 游戏更新后可能需要新的 AES、usmap 或解析适配。程序会提示重新校验；旧缓存恢复视图只显示已经生成的旧模型。
-- 现有真实场景验收只覆盖记录中的本机环境，不保证未来游戏版本或所有电脑均兼容。
+- 当前主要支持 Windows x64；游戏版本、浏览器和显卡环境可能影响兼容性与加载性能。
 
 详细说明见 [资源解析与兼容边界](docs/resource-compatibility.md)。
 
