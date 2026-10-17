@@ -2,7 +2,9 @@
 
 面向《无限暖暖》的非官方本地家园存档编辑器，支持三维场景预览、家具编辑、染色与预设，以及 JSON 存档保存和导出。
 
-当前处于开发与验证阶段，支持 Windows 源码运行，并提供 Windows x64 Portable 构建方式。普通用户使用免安装包的步骤见 [Portable 使用说明](docs/PORTABLE.md)；以下环境准备与安装命令供源码运行使用。
+📥 **下载使用：[Windows x64 Portable（Releases）](https://github.com/Ccc-gi/NikkiStudio/releases)**
+
+当前处于开发与验证阶段，支持 Windows 源码运行和 Windows x64 Portable 免安装运行。免安装包的操作步骤见 [Portable 使用说明](docs/PORTABLE.md)；以下环境准备与安装命令供源码运行使用。
 
 项目不附带游戏模型、贴图、AES 密钥、usmap 或玩家存档。这些输入需要用户自行准备，并与自己的游戏版本匹配。
 
@@ -35,7 +37,7 @@
 
 | 目标 | 入口与说明 |
 | --- | --- |
-| 下载使用 | 查看 [Portable 使用说明](docs/PORTABLE.md)，Windows x64 免安装包无需安装开发工具 |
+| 下载使用 | 前往 [Releases 下载 Windows x64 Portable](https://github.com/Ccc-gi/NikkiStudio/releases)，解压即可运行，无需安装开发工具；步骤见 [使用说明](docs/PORTABLE.md) |
 | 从源码运行 | 展开 [使用前准备](#preparation) 和 [从源码启动](#source-start)，安装依赖并构建解析器 |
 | 开始编辑 | 展开 [首次配置与编辑](#configuration)，准备游戏目录、AES、usmap 和家园 JSON 存档 |
 | 管理数据 | 展开 [数据保存在哪里](#data-storage)，了解配置、预设与缓存位置 |
