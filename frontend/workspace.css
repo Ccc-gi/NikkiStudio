@@ -10,7 +10,7 @@ button,input,select{font:inherit}button{border:1px solid transparent;background:
 .view-hint[open]>summary{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-text)}
 .view-hint>p{position:absolute;bottom:calc(100% + 6px);left:0;margin:0;width:max-content;max-width:min(720px,calc(100vw - 32px));padding:9px 12px;border-radius:10px;background:#FFFDF7f7;border:1px solid var(--line-2);box-shadow:0 2px 10px #4A3A2826;color:var(--ink);font-size:11px;line-height:1.7}#status{position:absolute;z-index:1;bottom:48px;left:50%;transform:translateX(-50%);max-width:min(760px,calc(100% - 32px));background:#FDF0D2f5;border:1px solid var(--accent);box-shadow:0 2px 10px #4A3A2826;padding:10px 16px;border-radius:12px;font-size:12px;line-height:1.6;color:var(--accent-text);text-align:center;pointer-events:none}#status:empty{display:none}.panel-heading{padding:18px 0;border-bottom:1px solid var(--line);font-weight:600}#emptySelection{color:var(--ink-2);text-align:center;padding:40px 0;line-height:2}h2{font-size:17px;margin:20px 0 9px}#selectedMeta{font-size:11px;color:var(--ink-2);line-height:1.8}.property-heading{margin-top:24px;margin-bottom:10px;font-weight:600}.property-heading small{float:right;color:var(--ink-2);font-weight:400;font-size:11px}.axis-fields{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.axis-fields label{font-size:11px;color:var(--ink-2)}.axis-fields input{display:block;width:100%;margin-top:6px;padding:8px 5px}.axis-fields label:first-child{color:var(--axis-x)}.axis-fields label:nth-child(2){color:var(--axis-y)}.axis-fields label:nth-child(3){color:var(--axis-z)}.property-note{font-size:11px;color:var(--ink-2);line-height:1.8}footer{height:32px;display:flex;align-items:center;justify-content:space-between;gap:15px;padding:0 16px;background:var(--surface-2);border-top:1px solid var(--line);font-size:10px;color:var(--ink-2)}footer #performance{color:var(--ink-2)}body.single-preview .appbar,body.single-preview .toolbar,body.single-preview aside,body.single-preview footer,body.single-preview .view-hint{display:none}body.single-preview .workspace{display:block}body.single-preview .viewport{height:100%}@media(max-width:1100px){.workspace{grid-template-columns:220px minmax(0,1fr) 250px}.workspace-label{display:none}.toolbar{gap:3px}.tool-section{padding-right:4px}.toolbar button{padding:8px}.brand span{display:none}}
 
-.selection-marquee{position:absolute;z-index:5;border:1px solid #3A7BD5;background:#3A7BD522;pointer-events:none}.selection-marquee.crossing{border:1px dashed #2F9E68;background:#2F9E6822}.selection-marquee span{position:absolute;left:0;top:-23px;white-space:nowrap;background:#FFFDF7f0;padding:3px 7px;font-size:11px;color:#2A6BB0}.selection-marquee.crossing span{color:#1F7A4E}
+.selection-marquee{position:absolute;z-index:5;border:1px solid var(--accent);background:color-mix(in srgb,var(--accent-fill) 14%,transparent);pointer-events:none}.selection-marquee.crossing{border-style:dashed;border-color:var(--accent-text)}.selection-marquee span{position:absolute;left:0;top:-25px;white-space:nowrap;background:var(--surface-2);border:1px solid var(--line-2);border-radius:4px;padding:3px 7px;font-size:11px;color:var(--accent-text)}
 .compact-panel-toggle{display:none}@media(max-width:800px){.workspace{display:block;position:relative}.viewport{height:100%}.left-panel,.right-panel{display:none}.left-panel.compact-open,.right-panel.compact-open{display:flex;position:absolute;z-index:8;top:0;bottom:0;width:260px;box-shadow:0 0 25px #4A3A2829}.left-panel.compact-open{left:0}.right-panel.compact-open{right:0}.toolbar{flex-shrink:0;min-height:55px}.tool-section{flex-shrink:0;white-space:nowrap}.appbar{flex-shrink:0;padding:0 8px;gap:8px}.brand{letter-spacing:0}.document-name{margin-left:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}.appbar button{white-space:nowrap;padding:7px}.compact-panel-toggle{display:block;position:absolute;z-index:9;top:12px;padding:7px;background:#FFFDF7f0}.compact-panel-toggle.left{left:12px}.compact-panel-toggle.right{right:12px}footer{flex-shrink:0;overflow:hidden}footer span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}footer #performance{display:none}#status{max-height:55px;overflow:hidden}.view-hint>summary,.view-hint>p{font-size:10px}}
 
 .category-filters{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 12px 10px}.category-filters select{width:100%;font-size:11px;padding:7px 4px}
@@ -63,6 +63,8 @@ button,input,select{font:inherit}button{border:1px solid transparent;background:
 .workspace.adjustable-panels{grid-template-columns:var(--left-width,320px) minmax(0,1fr) var(--right-width,288px)}
 .adjustable-panels .left-panel{grid-column:1;grid-row:1}.adjustable-panels .viewport{grid-column:2;grid-row:1}.adjustable-panels .right-panel{grid-column:3;grid-row:1}
 .adjustable-panels .left-panel,.adjustable-panels .right-panel{position:relative;min-width:0}
+/* Reserve a separate resize rail so the panel handle cannot cover scrollbars. */
+.adjustable-panels .left-panel{padding-right:10px}
 .adjustable-panels .panel-collapsed{display:none}
 .panel-drawer-bar{display:flex;align-items:center;justify-content:space-between;min-height:36px;flex-shrink:0;padding:4px 12px;font-size:11px;color:var(--ink-2);border-bottom:1px solid var(--line)}
 .panel-drawer-bar button{padding:0 9px;font-size:22px;line-height:26px;border-radius:8px}
@@ -335,3 +337,26 @@ body.single-preview .scene-view-actions{display:none}
 @media (prefers-reduced-motion:reduce){.konami-cat{display:none}}
 
 .brand{display:flex;align-items:center;gap:8px}.brand img{display:block;object-fit:contain;flex-shrink:0}
+
+/* Usage guide shares the settings dialog's theme and native modal behavior. */
+.help-dialog{width:min(780px,calc(100vw - 32px))}
+.help-project-link{margin-right:auto;font-size:12px;white-space:nowrap}
+.help-content{min-height:0;overflow:auto;overscroll-behavior:contain;padding:22px 26px;scrollbar-gutter:stable;line-height:1.8}
+.help-intro{margin:0 0 20px;color:var(--ink-2);font-size:13px}
+.help-section+.help-section{margin-top:26px;padding-top:24px;border-top:1px solid var(--line)}
+.help-section-heading{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
+.help-section-number{display:grid;place-items:center;flex:0 0 34px;height:34px;background:var(--accent-soft);border:1px solid var(--line-2);border-radius:10px;color:var(--accent-text);font-size:12px;font-weight:600}
+.help-section h3{font-size:17px;margin:0;color:var(--ink)}
+.help-section-heading p{margin:3px 0 0;color:var(--ink-2);font-size:12px}
+.help-steps{margin:0;padding-left:24px}.help-steps>li{padding-left:5px;margin:0 0 14px}.help-steps>li::marker{color:var(--accent-text);font-weight:600}
+.help-steps p{margin:5px 0 0}.help-content strong{font-weight:600}
+.help-note{margin:12px 0 0;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:9px;color:var(--ink-2);font-size:12px}
+.help-note p{margin:6px 0 0}.help-note strong{color:var(--ink)}
+.help-warning{padding:14px 16px;margin-bottom:18px;background:var(--accent-soft);border:1px solid var(--line-2);border-left:3px solid var(--accent);border-radius:9px;color:var(--accent-text)}
+.help-warning p{margin:5px 0 0;color:var(--ink);font-size:12px}
+.help-content code{font-size:12px;background:var(--surface-2);padding:2px 5px;border-radius:4px;overflow-wrap:anywhere}
+@media(max-width:600px){.help-content{padding:18px 20px}.help-section-heading{gap:10px}}
+
+.help-contents{display:flex;flex-wrap:wrap;gap:8px;margin:-6px 0 24px}.help-contents a{padding:5px 10px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;color:var(--accent-text);text-decoration:none;font-size:12px}.help-contents a:hover{background:var(--accent-soft);border-color:var(--line-2)}
+.help-section h3{scroll-margin-top:16px}.help-topic{margin:18px 0}.help-topic h4{font-size:13px;margin:0 0 6px;color:var(--ink)}.help-topic p{margin:6px 0;color:var(--ink-2);font-size:12px}.help-topic strong{color:var(--ink)}
+.help-bullets{margin:6px 0;padding-left:20px;color:var(--ink-2);font-size:12px}.help-bullets li{padding-left:3px;margin:7px 0}.help-bullets li::marker{color:var(--accent-text)}

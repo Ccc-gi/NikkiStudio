@@ -1,6 +1,6 @@
 {
   "name": "nikki-studio-local",
-  "version": "0.3.1",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "dependencies": {

@@ -1,5 +1,5 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nikki Studio · 家园存档编辑器</title><link rel="icon" href="/app-icon.ico" sizes="any"><script>try{if(localStorage.getItem('nikki.cursorStyle')==='system')document.documentElement.classList.add('system-cursor')}catch{}</script><link rel="stylesheet" href="/workspace.css?v=presets-1"></head><body>
-<div class="appbar"><div class="brand"><img src="/app-icon.png" alt="" width="32" height="32"> NIKKI <span>STUDIO</span></div><details class="appbar-menu"><summary>文件</summary><div class="appbar-menu-actions"><button id="importSave">打开存档</button><button id="saveDocument" title="Ctrl+S">保存存档</button><button id="exportSave" title="Ctrl+Shift+S">另存为存档</button></div></details><details class="appbar-menu"><summary>游戏</summary><div class="appbar-menu-actions"><button id="chooseGameDirectory">选择游戏目录</button><button class="primary" id="saveGame" disabled>保存到游戏存档</button></div></details><button id="openSettings" aria-haspopup="dialog">⚙ 设置</button><div class="document-status"><span class="document-name" id="documentName">正在打开存档…</span><span id="dirtyBadge">已载入</span></div></div>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nikki Studio · 家园存档编辑器</title><link rel="icon" href="/app-icon.ico" sizes="any"><script>document.documentElement.classList.add('system-cursor');try{if(localStorage.getItem('nikki.cursorStyle')==='paw')document.documentElement.classList.remove('system-cursor')}catch{}</script><link rel="stylesheet" href="/workspace.css?v=presets-1"></head><body>
+<div class="appbar"><div class="brand"><img src="/app-icon.png" alt="" width="32" height="32"> NIKKI <span>STUDIO</span></div><details class="appbar-menu"><summary>文件</summary><div class="appbar-menu-actions"><button id="importSave">打开存档</button><button id="saveDocument" title="Ctrl+S">保存存档</button><button id="exportSave" title="Ctrl+Shift+S">另存为存档</button></div></details><details class="appbar-menu"><summary>游戏</summary><div class="appbar-menu-actions"><button id="chooseGameDirectory">选择游戏目录</button><button class="primary" id="saveGame" disabled>保存到游戏存档</button></div></details><button id="openSettings" aria-haspopup="dialog">⚙ 设置</button><button id="openHelp" aria-haspopup="dialog" aria-controls="helpDialog">ⓘ 帮助</button><div class="document-status"><span class="document-name" id="documentName">正在打开存档…</span><span id="dirtyBadge">已载入</span></div></div>
 <nav class="toolbar"><div class="toolbar-tools"><div class="tool-section"><button id="undo" title="Ctrl+Z">↶ 撤销</button><button id="redo" title="Ctrl+Y">↷ 重做</button></div><div class="tool-section modes"><button data-mode="select" class="active">↖ 选择</button><button title="M" data-mode="translate">✥ 移动</button><button title="R" data-mode="rotate">↻ 旋转</button><button title="V" data-mode="scale">⤢ 缩放</button></div><div class="tool-section"><button title="T" id="grab" disabled>抓取</button><button title="Ctrl+C 复制并拿起放置" id="duplicate">复制</button><button id="arrayDuplicate" disabled>阵列复制</button><button id="curveDuplicate" disabled>曲线阵列</button><button id="delete">删除</button><button id="focusSelection">聚焦选中</button></div><div class="tool-section"><select id="space"><option value="world">世界坐标</option><option value="local" selected>局部坐标</option></select></div></div></nav>
 <div class="workspace"><aside class="left-panel"><div class="tabs"><button id="sceneTab" class="active">▤ 场景</button><button id="libraryTab">▦ 物品工具箱</button><button id="presetTab">★ 预设</button></div><div class="panel-intro"><strong id="listTitle">场景浏览器</strong><span id="objectCount">0 件</span></div><div id="categoryTools" class="category-tools" aria-label="资源分类"></div><div id="subcategoryTools" class="subcategory-tools" aria-label="资源子类"></div><div class="category-filters" hidden><select id="majorCategory" aria-label="物品大类"><option value="">全部大类</option></select><select id="minorCategory" aria-label="物品子类"><option value="">全部子类</option></select></div><input class="search" id="sceneSearch" placeholder="搜索名称、物品 ID 或实例 ID"><div id="sceneList" class="object-list"></div><div class="panel-note" id="listNote">单击选择 · 双击聚焦</div></aside>
 <section class="viewport"><div class="scene-view-actions"><button id="fit">查看整个家园</button></div><main><div id="status">正在载入物品…</div></main><details class="view-hint"><summary>操作提示</summary><p>左键框选 · 右键/中键平移 · Shift＋右键/中键旋转 · 滚轮推进 · WASD 移动 · Q/E 升降 · Shift 加速 · Alt 精细变换</p></details></section>
@@ -20,12 +20,12 @@
         <h3>画面与环境</h3>
         <div class="settings-group"><h4>渲染与光照</h4><label for="renderQuality">渲染等级</label><select id="renderQuality" title="切换画面效果，不会重新加载模型"><option value="light">轻量</option><option value="standard" selected>标准</option><option value="fine">精细</option></select><!-- 空节点：时间与亮度控件按它插入，诊断数据也存在它的 dataset 上，不要删除。 -->
         <p id="renderQualityNote" class="settings-hint"></p><p id="textureQualityStatus" class="settings-hint" role="status">精细：原始高清 · 标准：预览 · 轻量：低分辨率</p></div>
-        <div class="settings-group"><h4>场景地面</h4><label class="settings-check"><input id="grassGround" type="checkbox" checked><span>显示草地地面<small>精细等级包含立体草团与小花。</small></span></label></div>
+        <div class="settings-group"><h4>场景地面</h4><label class="settings-check"><input id="grassGround" type="checkbox" checked><span>显示草团与小花<small>仅精细等级显示，关闭后保留地面。</small></span></label></div>
         <div class="settings-group"><h4>性能</h4><label class="settings-check"><input id="batchRendering" type="checkbox" checked><span>合并重复物品绘制<small>减少绘制开销，建议保持开启。</small></span></label></div>
       </section>
       <section id="settingsEditing" role="tabpanel" aria-labelledby="tabEditing" hidden>
         <h3>编辑辅助</h3><p class="settings-description">辅助观察与摆放，不修改存档内容。</p>
-        <div class="settings-group"><h4>界面</h4><label for="cursorStyle">鼠标光标</label><select id="cursorStyle"><option value="paw">大喵猫爪</option><option value="system">系统光标</option></select></div>
+        <div class="settings-group"><h4>界面</h4><label for="cursorStyle">鼠标光标</label><select id="cursorStyle"><option value="system">系统光标</option><option value="paw">大喵猫爪</option></select></div>
         <div class="settings-group"><h4>视图辅助</h4><label class="settings-check"><input id="showGrid" type="checkbox"><span>显示参考网格</span></label></div>
         <details class="settings-diagnostics"><summary>高级诊断</summary><p class="settings-hint">用于检查模型与材质，通常无需开启。</p><label class="settings-check"><input id="clay" type="checkbox"><span>灰模对照</span></label><label class="settings-check"><input id="missing" type="checkbox"><span>显示未匹配物品线框</span></label></details>
       </section>
@@ -40,5 +40,52 @@
     </div>
   </div>
   <footer class="settings-footer"><button id="doneSettings" class="primary">完成</button></footer>
+</dialog>
+<dialog id="helpDialog" class="settings-dialog help-dialog" aria-labelledby="helpTitle">
+  <header class="settings-header"><h2 id="helpTitle">使用帮助</h2><button id="closeHelp" aria-label="关闭帮助">✕</button></header>
+  <div class="help-content">
+    <p class="help-intro">根据是否需要将修改应用到游戏，选择对应的使用方式。</p>
+    <nav class="help-contents" aria-label="帮助目录"><a href="#helpFileTitle">01 直接编辑</a><a href="#helpGameTitle">02 连接游戏</a><a href="#helpSafetyTitle">03 安全须知</a></nav>
+    <section class="help-section" aria-labelledby="helpFileTitle">
+      <div class="help-section-heading"><span class="help-section-number" aria-hidden="true">01</span><div><h3 id="helpFileTitle">直接编辑存档</h3><p>不连接游戏存档目录，独立编辑与保存 JSON 文件。</p></div></div>
+      <ol class="help-steps">
+        <li>通过<strong>文件 → 打开存档</strong>，选择自己的家园 JSON 存档。</li>
+        <li>完成编辑后，使用<strong>存档检查</strong>查看可能存在的问题。</li>
+        <li>通过<strong>文件 → 保存存档</strong>或<strong>另存为存档</strong>保存修改。</li>
+      </ol>
+      <p class="help-note">无需授权游戏存档目录。三维模型预览仍需完成游戏资源配置。</p>
+    </section>
+    <section class="help-section" aria-labelledby="helpGameTitle">
+      <div class="help-section-heading"><span class="help-section-number" aria-hidden="true">02</span><div><h3 id="helpGameTitle">连接游戏并应用修改</h3><p>读取本地游戏存档，编辑后写回，再在游戏中还原数据。</p></div></div>
+      <aside class="help-warning"><strong>操作前，先在游戏内备份</strong><p>将当前家园方案上传到游戏服务器，保存在“自定义方案 1–10”中的一个位置。软件问题或游戏更新可能导致不可预期的结果，请及时更新备份。</p></aside>
+      <ol class="help-steps">
+        <li><strong>连接游戏目录</strong><p>点击顶部的<strong>连接游戏目录</strong>，选择本地游戏安装目录 <code>InfinityNikki</code> 文件夹。</p><div class="help-note"><strong>没有找到 BuildData，或载入后是空存档？</strong><p>进入游戏家园，使用建造能力并点击<strong>脱离卡死</strong>，让家园存档缓存到本地 <code>BuildData</code>，然后返回编辑器重新读取。</p><p>如果从未执行过此操作，本地可能尚未生成相关文件。退出游戏后，缓存文件也可能暂时存在，但不会一直保留；使用前建议重新执行一次“脱离卡死”。</p></div></li>
+        <li><strong>载入最新游戏存档</strong><p>在游戏存档列表中选择 <code>BUILD_SAVEDATA_*.json</code>，点击<strong>载入</strong>。执行“脱离卡死”后，若编辑器提示游戏存档发生变化，请重新载入，确认家园内容已正确显示后再编辑。</p></li>
+        <li><strong>编辑、保存并在游戏中还原</strong><p>编辑当前存档，或导入其他存档内容，完成检查后点击<strong>保存到游戏存档</strong>，将修改写入本地游戏存档。</p><p>切回游戏，再次使用建造能力。出现异常退出提示框时，选择<strong>还原数据</strong>，加载编辑后的内容。</p></li>
+      </ol>
+      <p class="help-note">写回前会备份本地原文件，并检查是否被外部修改。若写回被阻止，请重新载入最新游戏存档后再操作。游戏更新后，存档读取与还原流程可能变化。</p>
+    </section>
+    <section class="help-section" aria-labelledby="helpSafetyTitle">
+      <div class="help-section-heading"><span class="help-section-number" aria-hidden="true">03</span><div><h3 id="helpSafetyTitle">安全须知与免责声明</h3><p>了解资源来源、官方授权状态及使用风险后，再决定是否使用。</p></div></div>
+      <div class="help-topic"><h4>开发初衷</h4><p>Nikki Studio 希望为家园创作者提供更直观、便捷的三维布局编辑工具，方便规划、尝试与创作，不以破坏游戏体验或获取不当利益为目的。开发初衷不代表官方认可，也不消除使用第三方工具的风险。</p></div>
+      <div class="help-topic"><h4>与游戏官方的关系</h4><p>本项目为独立开发的非官方工具，<strong>未取得《无限暖暖》官方对本编辑器的明确授权</strong>，不代表与游戏开发商或运营方存在合作、认证或背书关系。游戏名称、商标、美术及相关内容的权利归相应权利人所有。</p><p>项目的开源许可证仅适用于其覆盖的代码与内容，不授予游戏资源的使用或再分发权利，也不替代游戏用户协议或官方书面许可。</p></div>
+      <div class="help-topic"><h4>资源从哪里来</h4><ul class="help-bullets">
+        <li><strong>游戏模型、贴图与家具配置：</strong>从使用者自行安装的游戏文件中按需读取、解析并生成本地缓存，源码与 Portable 包不附带这些游戏资源。</li>
+        <li><strong>AES 与 usmap：</strong>由使用者自行取得并提供，程序不自动抓取。配置页的参考链接指向第三方来源，不代表官方授权；请自行确认来源、使用权限与版本匹配情况。</li>
+        <li><strong>家园存档与预设：</strong>由使用者打开、导入或创建。导入他人的存档或预设前，请确认来源和分享权限。</li>
+        <li><strong>预览环境与程序依赖：</strong>草地、天空等环境由项目程序生成；资源解析与显示使用 CUE4Parse、Three.js 等第三方组件，部分算法与交互参考 BuildingMomo。来源及许可详见随程序提供的 <code>NOTICE.md</code>、<code>LICENSE</code> 和第三方许可文件。</li>
+      </ul></div>
+      <aside class="help-warning"><strong>修改存档可能带来账号风险</strong><p>官方协议对数据修改和非授权第三方工具的使用设有限制，违规处理可能包括功能限制、数据处理或封禁账号。本项目无法保证使用行为符合所有区服的规则，也无法承诺不会受到处罚。是否构成违规及采取何种措施，以适用协议和运营方处理为准。</p></aside>
+      <div class="help-topic"><h4>使用前需要了解的风险</h4><ul class="help-bullets">
+        <li><strong>存档风险：</strong>软件缺陷、误操作、游戏同步或版本差异，可能导致存档覆盖、损坏、丢失、物品异常或游戏拒绝读取。请保留独立文件副本，并在游戏内及时备份自定义方案。</li>
+        <li><strong>兼容性风险：</strong>游戏更新可能改变资源和存档格式；三维预览、建造检查与保存成功均不保证游戏中的最终结果。发现异常时请停止写回，先核对版本与备份。</li>
+        <li><strong>输入与隐私：</strong>不要公开上传密钥、映射、完整个人存档或用户数据目录。反馈问题前请检查截图、日志及附件，移除个人标识、私有路径和敏感输入。</li>
+        <li><strong>使用边界：</strong>请遵守适用法律、游戏协议和资源许可，不将本工具用于侵害他人权益、破坏游戏体验或获取不当利益的行为。</li>
+      </ul></div>
+      <div class="help-topic"><h4>免责声明</h4><p>本软件按现状提供，不对持续可用、完整兼容、数据恢复或账号安全作出保证。使用前请了解上述风险，自行决定是否编辑及写回，并保留可用备份。本说明不构成官方许可、合规保证或风险豁免，也不排除或限制依法不得免除的责任。</p></div>
+      <p class="help-note">官方规则参考：<a class="settings-link" href="https://infinitynikki.nuanpaper.com/notice/service" target="_blank" rel="noopener noreferrer">国服《叠纸游戏许可及服务协议》↗</a>。其他区服请查阅对应运营方的最新协议与公告。</p>
+    </section>
+  </div>
+  <footer class="settings-footer"><a class="help-project-link settings-link" href="https://github.com/Ccc-gi/NikkiStudio" target="_blank" rel="noopener noreferrer">GitHub 项目主页 ↗</a><button id="doneHelp" class="primary">知道了</button></footer>
 </dialog>
 <script type="importmap">{"imports":{"three":"/vendor/build/three.module.js","three/addons/":"/vendor/examples/jsm/"}}</script><script type="module" src="/save_scene.js"></script><script type="module" src="/runtime_status.js"></script></body></html>

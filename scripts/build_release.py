@@ -173,6 +173,7 @@ if __name__ == '__main__':
     parser.add_argument('--portable', action='store_true', help='Build only the Windows Portable package')
     parser.add_argument('--out-dir')
     parser.add_argument('--worker-dir')
+    parser.add_argument('--checksums', action='store_true', help='Also write SHA256SUMS.txt for downloads')
     args = parser.parse_args()
     policy_file = ROOT / 'project-policy.json'
     policy = json.loads(policy_file.read_text(encoding='utf-8')) if policy_file.exists() else {}
@@ -187,7 +188,7 @@ if __name__ == '__main__':
     source_archive = output / ('NikkiStudio-' + version + '-source.zip')
     windows_archive = output / ('NikkiStudio-' + version + '-portable-win-x64.zip')
     expected = ([] if args.portable else [source_archive]) + ([windows_archive] if args.windows or args.portable else [])
-    for file in expected + [output / 'release-manifest.json', output / 'SHA256SUMS.txt']:
+    for file in expected + [output / 'release-manifest.json'] + ([output / 'SHA256SUMS.txt'] if args.checksums else []):
         if file.exists():
             raise FileExistsError('Refusing to overwrite an existing release artifact: ' + str(file))
     output.mkdir(parents=True, exist_ok=True)
@@ -200,8 +201,12 @@ if __name__ == '__main__':
         bundle = windows_bundle(output, version, args.worker_dir)
         archive_folder(bundle, windows_archive)
         artifacts.append(windows_archive)
-    report['artifacts'] = [{'name': file.name, 'size': file.stat().st_size, 'sha256': digest(file)} for file in artifacts]
+    report['artifacts'] = [{'name': file.name, 'size': file.stat().st_size} for file in artifacts]
+    if args.checksums:
+        for file, row in zip(artifacts, report['artifacts']):
+            row['sha256'] = digest(file)
     (output / 'release-manifest.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
-    (output / 'SHA256SUMS.txt').write_text(''.join(row['sha256'] + '  ' + row['name'] + '\n'
-                                                for row in report['artifacts']), encoding='utf-8')
+    if args.checksums:
+        (output / 'SHA256SUMS.txt').write_text(''.join(row['sha256'] + '  ' + row['name'] + '\n'
+                                                    for row in report['artifacts']), encoding='utf-8')
     print(json.dumps(report, indent=2))

@@ -58,6 +58,7 @@ export function createSoftGrass(){
   mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
   mesh.name='ProceduralSoftGrass';mesh.count=0;mesh.castShadow=false;mesh.receiveShadow=true;
   mesh.frustumCulled=false;mesh.raycast=()=>{};
+  let enabled=true,groundY=0;
   let last='',obstacles=[],revision=0,pendingGroup=null,job=null,lastStart=-Infinity;
   const nextMatrices=new Float32Array(capacity*16),nextColors=new Float32Array(capacity*3);
   const nextVariants=new Float32Array(capacity),nextLeans=new Float32Array(capacity*2);
@@ -70,11 +71,11 @@ export function createSoftGrass(){
       // Low surfaces cover the preview lawn: paving, decks, steps and rocks.
       // Elevated furniture and foliage do not clear the entire area underneath.
       let owner=o;while(owner.parent&&owner.parent!==group)owner=owner.parent;
-      if(b.min.y<.18&&b.max.y>-.13&&b.max.y<1.2)
+      if(b.min.y<.18&&b.max.y>=groundY&&b.max.y<1.2)
         obstacles.push({minX:b.min.x-.35,maxX:b.max.x+.35,minZ:b.min.z-.35,maxZ:b.max.z+.35,owner});
     });
     for(const b of obstacles){
-      obstacleBounds.expandByPoint(new T.Vector3(b.minX,-.115,b.minZ));
+      obstacleBounds.expandByPoint(new T.Vector3(b.minX,groundY,b.minZ));
       obstacleBounds.expandByPoint(new T.Vector3(b.maxX,.4,b.maxZ));
       const x0=Math.floor(b.minX/8),x1=Math.floor(b.maxX/8),z0=Math.floor(b.minZ/8),z1=Math.floor(b.maxZ/8);
       if((x1-x0+1)*(z1-z0+1)>4096){largeObstacles.push(b);continue;}
@@ -86,7 +87,7 @@ export function createSoftGrass(){
   function fit(group){pendingGroup=group;revision++;last='';job=null;lastStart=-Infinity;}
   function writePlant(index,x,z,shape,variant,width,height,flower=false){
     const angle=hash(shape.ix,shape.iz,2)*Math.PI*2,cos=Math.cos(angle)*width,sin=Math.sin(angle)*width;
-    nextMatrices.set([cos,0,-sin,0,0,height,0,0,sin,0,cos,0,x,-.115,z,1],index*16);
+    nextMatrices.set([cos,0,-sin,0,0,height,0,0,sin,0,cos,0,x,groundY,z,1],index*16);
     const tint=.93+hash(shape.ix,shape.iz,5)*.06,fertility=shape.fertility;
     nextColors.set(flower?[tint,tint,tint]:[(.93+fertility*.08)*tint,(.94+fertility*.08)*tint,(.88+fertility*.1)*tint],index*3);
     nextVariants[index]=variant;
@@ -97,7 +98,7 @@ export function createSoftGrass(){
     // Intersect all twelve frustum edges with the preview ground. This includes
     // the whole visible ground, even when the horizon crosses the viewport.
     const corners=[];for(const z of [-1,1])for(const y of [-1,1])for(const x of [-1,1])corners.push(new T.Vector3(x,y,z).unproject(camera));
-    const hits=[],groundY=-.115;
+    const hits=[];
     for(const [a,b] of [[0,1],[0,2],[1,3],[2,3],[4,5],[4,6],[5,7],[6,7],[0,4],[1,5],[2,6],[3,7]]){
       const from=corners[a],to=corners[b],dy=to.y-from.y;
       if(Math.abs(dy)<1e-8)continue;const t=(groundY-from.y)/dy;
@@ -170,7 +171,8 @@ export function createSoftGrass(){
   }
   function update(camera,level,ground){
     const started=performance.now();
-    mesh.visible=level==='fine'&&ground.visible;if(!mesh.visible){job=null;last='';return;}
+    groundY=ground.position?.y??0;
+    mesh.visible=enabled&&level==='fine'&&ground.visible;if(!mesh.visible){job=null;last='';mesh.userData.generationPending=false;return;}
     if(pendingGroup){scan(pendingGroup);pendingGroup=null;}
     camera.updateMatrixWorld();
     const key=[...camera.position.toArray().map(v=>Math.round(v*2)),
@@ -189,7 +191,8 @@ export function createSoftGrass(){
   }
   // Synchronous draining is used only by geometry tests, never by rendering.
   function flush(){while(job){if(job.next().done)job=null;}}
-  return {mesh,fit,update,flush};
+  function setEnabled(value){enabled=Boolean(value);if(!enabled){mesh.visible=false;job=null;last='';mesh.userData.generationPending=false;}}
+  return {mesh,fit,update,flush,setEnabled};
 }
 
 export function createSoftGroundMaterial(){

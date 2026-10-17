@@ -42,4 +42,9 @@ export function installWorkspaceSettings(){
   document.getElementById('openSettings').onclick=()=>dialog.showModal();
   for(const id of ['closeSettings','doneSettings'])document.getElementById(id).onclick=()=>dialog.close();
   dialog.addEventListener('close',()=>document.getElementById('openSettings').focus());
+  const help=document.getElementById('helpDialog'),openHelp=document.getElementById('openHelp');
+  openHelp.onclick=()=>{help.showModal();help.querySelector('.help-content').scrollTop=0;};
+  for(const id of ['closeHelp','doneHelp'])document.getElementById(id).onclick=()=>help.close();
+  help.addEventListener('keydown',e=>e.stopPropagation());
+  help.addEventListener('close',()=>openHelp.focus());
 }
